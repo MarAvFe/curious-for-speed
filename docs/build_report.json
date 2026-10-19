@@ -1,0 +1,127 @@
+{
+ "cars": [],
+ "tracks": [
+  {
+   "track": 1,
+   "length_m": 2108,
+   "min_radius_m": 55,
+   "tris": 101396,
+   "chunks": 9
+  },
+  {
+   "track": 2,
+   "length_m": 2230,
+   "min_radius_m": 54,
+   "tris": 99170,
+   "chunks": 7
+  }
+ ],
+ "audio": {
+  "sfx_honk": {
+   "peak": -14.0,
+   "rms": -27.4,
+   "seam": 0.0
+  },
+  "sfx_nitro": {
+   "peak": -14.0,
+   "rms": -26.6,
+   "seam": 0.0
+  },
+  "sfx_whoosh": {
+   "peak": -16.0,
+   "rms": -31.2,
+   "seam": 0.0
+  },
+  "sfx_bump": {
+   "peak": -14.0,
+   "rms": -25.4,
+   "seam": 0.0
+  },
+  "sfx_scrape": {
+   "peak": -20.0,
+   "rms": -38.0,
+   "seam": 0.0
+  },
+  "sfx_beep_low": {
+   "peak": -16.0,
+   "rms": -22.9,
+   "seam": 0.0
+  },
+  "sfx_beep_high": {
+   "peak": -14.0,
+   "rms": -26.6,
+   "seam": 0.0
+  },
+  "sfx_lap": {
+   "peak": -14.0,
+   "rms": -29.0,
+   "seam": 0.0
+  },
+  "sfx_fanfare": {
+   "peak": -12.0,
+   "rms": -25.6,
+   "seam": 0.0
+  },
+  "sfx_pop": {
+   "peak": -18.0,
+   "rms": -37.6,
+   "seam": 0.0014
+  },
+  "sfx_bell": {
+   "peak": -20.0,
+   "rms": -37.5,
+   "seam": 0.0
+  },
+  "sfx_blip": {
+   "peak": -20.0,
+   "rms": -30.0,
+   "seam": 0.0
+  },
+  "sfx_boop": {
+   "peak": -18.0,
+   "rms": -26.6,
+   "seam": 0.0
+  },
+  "loop_engine": {
+   "peak": -12.0,
+   "rms": -18.8,
+   "seam": 0.0001
+  },
+  "music_title": {
+   "peak": -12.0,
+   "rms": -24.1,
+   "seam": 0.0028
+  },
+  "music_harbor": {
+   "peak": -12.0,
+   "rms": -26.6,
+   "seam": 0.001
+  },
+  "music_canyon": {
+   "peak": -12.0,
+   "rms": -26.2,
+   "seam": 0.0
+  }
+ },
+ "icons": [
+  "play",
+  "pause",
+  "restart",
+  "home",
+  "gear",
+  "prev",
+  "next",
+  "car",
+  "flame",
+  "flag",
+  "web",
+  "dot",
+  "light",
+  "track_1",
+  "track_2",
+  "speed_1",
+  "speed_2",
+  "speed_3"
+ ],
+ "fails": []
+}

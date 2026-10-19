@@ -156,7 +156,7 @@ def _blinkers(p):
     return bake([Part(m, BASE["blink"], 1, glow=True) for m in ms])
 
 
-BUDGET = 14_000
+BUDGET = 15_000
 
 
 def build() -> list[dict]:

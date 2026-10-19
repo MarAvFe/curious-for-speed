@@ -38,6 +38,7 @@ var inp := 0.0
 var bot: Node = null
 var bumps := 0
 var near_misses := 0
+var lead_t := 0.0  ## seconds the player spent ahead of every rival (tests: overtakes are possible)
 var honks := 0
 var pause_layer: CanvasLayer
 var _resume_t := -10.0
@@ -345,6 +346,8 @@ func _process(dt: float) -> void:
 				r.bump_cd -= dt
 				_place(r, dt)
 			_laps()
+			if state == "race" and rivals.all(func(r: Racer) -> bool: return player.d > r.d):
+				lead_t += dt
 			_engine_sound(dt)
 			if state == "race":
 				_cam_follow(dt)
@@ -502,7 +505,8 @@ func _drive_ai(r: Racer, dt: float) -> void:
 	r.target_x = ai_target_x(r)
 	r.vx = lerpf(r.vx, clampf((r.target_x - r.x) * 1.6, -8.0, 8.0), 1.0 - exp(-5.0 * dt))
 	var gap := r.d - player.d
-	var band := clampf(1.0 - gap / 450.0, 0.88, 1.12) if not player.done else 1.0
+	# asymmetric: leaders ease off a lot, chasers barely speed up, so an overtake can be held (with nitro)
+	var band := clampf(1.0 - gap / 450.0, 0.88, 1.04) if not player.done else 1.0
 	if r.kind == "rival" and _assist > 0.0 and gap > 0.0:
 		band -= 0.06 * _assist  # player struggling: rivals ease off a touch
 	var target := r.cruise * r.skill * band
@@ -913,7 +917,7 @@ func result() -> Dictionary:
 		avg += v
 	avg /= maxf(frame_ms.size(), 1)
 	return {"ok": player.done, "track": Game.level_id, "time_s": snappedf(clock, 0.1), "bumps": bumps,
-		"near_misses": near_misses, "honks": honks,
+		"near_misses": near_misses, "honks": honks, "lead_s": snappedf(lead_t, 0.1),
 		"rival_progress": rivals.map(func(r: Racer) -> float: return snappedf(progress(r), 0.01)),
 		"frame_ms_avg": snappedf(avg, 0.01),
 		"frame_ms_p99": snappedf(sorted[int(sorted.size() * 0.99)] if sorted.size() > 0 else 0.0, 0.01)}
