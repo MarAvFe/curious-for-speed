@@ -1,6 +1,6 @@
 # Playtest guide (for the grown-up)
 
-Run `build/windows/web-racer.exe` (or `godot --path .`). He picks a car with ◀ ▶, then ▶ and a track.
+Run `build/windows/curious-for-speed.exe` (or `godot --path .`). He picks a car with ◀ ▶, then ▶ and a track.
 
 ## Watch for (each one is a tuning knob)
 | Watch | If it goes wrong | Knob |

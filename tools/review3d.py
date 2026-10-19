@@ -18,13 +18,13 @@ def _rot(elev, azim):
 
 
 def render(mesh, elev, azim, size=320, bg=(225, 222, 232), silhouette=False, ext=None):
-    img = Image.new("RGB", (size, size), bg)
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0)) if bg is None else Image.new("RGB", (size, size), bg)
     dr = ImageDraw.Draw(img)
     c = (mesh.bounds[0] + mesh.bounds[1]) / 2
     v = (mesh.vertices - c) @ _rot(elev, azim).T
     ext = ext or np.abs(v[:, :2]).max() * 1.1
     tri = v[mesh.faces]
-    cols = mesh.visual.vertex_colors[mesh.faces[:, 0], :3]
+    cols = mesh.visual.vertex_colors[mesh.faces[:, 0], :3]  # raw values: Godot shows them unconverted (checked on a screenshot)
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     for i in np.argsort(-tri[:, :, 2].mean(axis=1)):  # camera at +z looking -z: far (low z) first
         if n[i, 2] <= 0:

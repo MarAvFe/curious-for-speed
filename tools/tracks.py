@@ -155,8 +155,23 @@ class Kit:
         return True
 
 
-def road(tr: Track, kit: Kit, pal, skip_ground=()):
-    """Asphalt, lines, curbs, walls, embankment - per chunk."""
+def _runs(c0, c1, keep, n):
+    """Contiguous [a, b] sample ranges inside c0..c1 where keep(i) is true (b inclusive, for ribbons)."""
+    out, a = [], None
+    for i in range(c0, c1 + 1):
+        if keep(i % n):
+            a = i if a is None else a
+        elif a is not None:
+            out.append((a, i))
+            a = None
+    if a is not None and c1 > a:
+        out.append((a, c1))
+    return out
+
+
+def road(tr: Track, kit: Kit, pal, skip_ground=(), elevated=frozenset(), ground_y=-2.4):
+    """Asphalt, lines, curbs, walls, embankment - per chunk. Samples in `elevated` are an overpass/bridge deck:
+    no embankment, a dark underside + fascia, and pillars that never land on another stretch of road."""
     per = int(CHUNK / DS)
     W = tr.W
     for c0 in range(0, tr.n, per):
@@ -182,8 +197,27 @@ def road(tr: Track, kit: Kit, pal, skip_ground=()):
             # gap between road and curb/wall base so no sky shows through
             parts.append(Part(up_facing(ribbon(tr, c0, c1, sx * (W + CURB), sx * wx, 0.0, 0.0)), pal["road"]))
             if ch not in skip_ground:
-                parts.append(Part(up_facing(ribbon(tr, c0, c1, sx * (wx + 0.4), sx * (wx + 26), 0.0, -2.5)), pal["ground"]))
+                for a, b in _runs(c0, c1, lambda i: i not in elevated, tr.n):
+                    parts.append(Part(up_facing(ribbon(tr, a, b, sx * (wx + 0.4), sx * (wx + 26), 0.0, -2.5)), pal["ground"]))
+            for a, b in _runs(c0, c1, lambda i: i in elevated, tr.n):  # deck fascia below the outer wall face
+                fas = ribbon(tr, a, b, sx * (wx + 0.4), sx * (wx + 0.4), -0.8, 0.0)
+                parts.append(Part(_face_toward(fas, tr, a, sx), pal["wall"], 1))
+        for a, b in _runs(c0, c1, lambda i: i in elevated, tr.n):
+            parts.append(Part(flip(up_facing(ribbon(tr, a, b, -(W + CURB + 0.6), W + CURB + 0.6, -0.8, -0.8))), pal["wall"], 0))
         kit.add(bake(parts), ch)
+    # pillars: every 24 m under the deck, skipped where they would stand on another stretch of road
+    for i in sorted(elevated)[::12]:
+        p, t, r, _ = tr.at(i * DS)
+        h = p[1] - ground_y - 0.85  # stop just under the deck underside (-0.8), never poke through the road
+        if h < 2.5:
+            continue
+        foot = p.copy()
+        foot[1] = ground_y
+        near = tr.tree.query_ball_point(foot[[0, 2]], tr.W[i] + CURB + 3.0)
+        if any(min(abs(j - i), tr.n - abs(j - i)) > 30 for j in near):
+            continue
+        pil = bake([props.P(props.bd.Pos(0, h / 2, 0) * props.bd.Box(2.2, h, 1.6), pal["wall"])], outline=0.08)
+        kit.add(placed(pil, foot, t))
 
 
 def _face_toward(m, tr, i, side):
@@ -349,7 +383,104 @@ def track_2():
     return tr, kit, pal, data
 
 
-DEFS = {1: track_1, 2: track_2}
+def flat_spot(tr: Track, frac: float, elevated) -> float:
+    """Nearest s to frac*L that is on the ground and at least 70 m from any other stretch of road
+    (gates and barriers must never sit on an overpass or at a crossing)."""
+    best = None
+    for k in range(tr.n):
+        for i in ((int(frac * tr.n) + k) % tr.n, (int(frac * tr.n) - k) % tr.n):
+            if i in elevated:
+                continue
+            near = tr.tree.query_ball_point(tr.P[i, [0, 2]], 70.0)
+            if all(min(abs(j - i), tr.n - abs(j - i)) < 45 for j in near):
+                best = i
+                break
+        if best is not None:
+            break
+    return round(best * DS, 1)
+
+
+def track_3():
+    """Neon Downtown: night city figure-8. One branch climbs onto an overpass and crosses over the other;
+    tall towers close to the road, neon signs, a railway crossing and a construction barrier."""
+    pal = TRACKS[3]
+    a = 470.0
+    ctrl, ys = [], []
+    for k in range(16):
+        t = 2 * math.pi * ((k + 13) % 16) / 16  # start just past the low crossing
+        d = 1 + math.sin(t) ** 2
+        x, z = a * math.cos(t) / d, a * math.sin(t) * math.cos(t) / d
+        if x > 0:
+            x *= 1.12  # lobes differ: no mirror-symmetric city
+        ctrl.append((x, z))
+        u = math.atan2(math.sin(t - math.pi / 2), math.cos(t - math.pi / 2))  # 0 at the high crossing
+        ys.append(round(11.0 * math.exp(-(u / 0.55) ** 2), 2))
+    tr = Track(ctrl, ys, 9.0)
+    rng = np.random.default_rng(3)
+    kit = Kit(tr)
+    elevated = frozenset(i for i in range(tr.n) if tr.P[i, 1] > 3.0)
+    road(tr, kit, pal, elevated=elevated)
+    start_area(tr, kit, pal, 7)
+    lamps(tr, kit, pal, every=30.0)
+    billboards(tr, kit, pal, rng, 6)
+    blds = [props.building(pal, rng.uniform(12, 20), rng.uniform(12, 20), rng.uniform(30, 85), 20 + k, outline=0.12) for k in range(12)]
+    n_b = 0
+    for _ in range(1400):
+        if n_b >= 150:
+            break
+        s = rng.uniform(0, tr.L)
+        if kit.prop_side(blds[int(rng.integers(len(blds)))], s, rng.choice([-1, 1]), tr.W[0] + rng.uniform(15, 60), 14.0):
+            n_b += 1
+    signs = [props.neon_sign(pal, k) for k in range(6)]
+    scatter(tr, kit, rng, lambda: signs[int(rng.integers(6))], 30, 4, 7, 1.6)
+    data = {
+        "name": "Neon Downtown", "laps": 2, "music": "music_downtown", "fog": [100.0, 650.0],
+        "gates": [{"s": flat_spot(tr, 0.30, elevated), "kind": "cross", "period": 6.0}],
+        "slides": [{"s": flat_spot(tr, 0.80, elevated), "width": 7.0, "amp": 5.5, "period": 4.5}],
+        "birds": [{"s": round(s_, 1), "x": float(sx * 30), "y": 30.0} for s_, sx in ((400, 1), (1300, -1))],
+        "traffic": 12,
+    }
+    return tr, kit, pal, data
+
+
+def track_4():
+    """Frost Pass: snowy mountain road at dawn. Big climbs, pines, peaks all around, a bridge across a frozen
+    lake, two sliding barriers (snow-clearing crews)."""
+    pal = TRACKS[4]
+    ctrl = [(0, 150), (0, -120), (-80, -330), (-250, -430), (-430, -370), (-510, -190), (-440, 0), (-470, 190),
+            (-360, 340), (-180, 350), (-40, 300)]
+    ys = [0, 0, 10, 22, 28, 18, 7, 7, 16, 10, 3]
+    tr = Track(ctrl, ys, 9.0)
+    rng = np.random.default_rng(4)
+    kit = Kit(tr)
+    lake = (-560, -380, -90, 270)  # x0, x1, z0, z1
+    inlake = lambda p: lake[0] < p[0] < lake[1] and lake[2] < p[2] < lake[3]
+    elevated = frozenset(i for i in range(tr.n) if inlake(tr.P[i]))
+    road(tr, kit, pal, elevated=elevated)
+    ice = trimesh.Trimesh(np.array([[lake[0], -2.0, lake[2]], [lake[1], -2.0, lake[2]], [lake[1], -2.0, lake[3]], [lake[0], -2.0, lake[3]]]),
+                          [[0, 2, 1], [0, 3, 2]], process=False)
+    kit.add(bake([Part(up_facing(ice), pal["water"], 1)]), 99)
+    start_area(tr, kit, pal, 9)
+    lamps(tr, kit, pal, every=60.0)
+    billboards(tr, kit, pal, rng, 4)
+    pines = [props.pine(pal, k) for k in range(5)]
+    scatter(tr, kit, rng, lambda: pines[int(rng.integers(5))], 90, 4, 45, 2.5)
+    peaks = [props.peak(pal, k) for k in range(5)]
+    scatter(tr, kit, rng, lambda: peaks[int(rng.integers(5))], 16, 160, 420, 90.0)
+    rocks = [props.boulder(pal, k) for k in range(4)]
+    scatter(tr, kit, rng, lambda: rocks[int(rng.integers(4))], 30, 5, 30, 3.0)
+    data = {
+        "name": "Frost Pass", "laps": 2, "music": "music_frost", "fog": [140.0, 750.0],
+        "gates": [],
+        "slides": [{"s": flat_spot(tr, 0.25, elevated), "width": 7.0, "amp": 5.5, "period": 5.0},
+                   {"s": flat_spot(tr, 0.70, elevated), "width": 7.0, "amp": 5.5, "period": 4.0}],
+        "birds": [{"s": round(s_, 1), "x": float(sx * 40), "y": 25.0} for s_, sx in ((300, 1), (1200, -1), (1800, 1))],
+        "traffic": 10,
+    }
+    return tr, kit, pal, data
+
+
+DEFS = {1: track_1, 2: track_2, 3: track_3, 4: track_4}
 TRACK_TRIS = 260_000
 
 

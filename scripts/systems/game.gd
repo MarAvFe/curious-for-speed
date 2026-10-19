@@ -86,7 +86,12 @@ func start_level(n: int) -> void:
 	go(RACE)
 
 
-## Car index 0..11 -> glb path. model = i / 6, livery = i % 6.
+## Selection slot 0..7 (2 bodies x 4 liveries) -> model index in glb space (model * 6 + livery).
+func sel_car(i: int) -> int:
+	return (i / 4) * LIVERIES + i % 4
+
+
+## Model index 0..11 -> glb path. model = i / 6, livery = i % 6 (liveries 4-5 are rivals only).
 func car_path(i: int) -> String:
 	return "res://assets/cars/car_%s_%d.glb" % [MODELS[(i / LIVERIES) % 2], i % LIVERIES]
 
@@ -201,6 +206,21 @@ func _self_test() -> void:
 	Save.load_data()
 	if Save.level(1)["cleared"] != false:
 		fails.append("missing save")
+	# unlocks: one car per finished race (repeats of the same track count), capped at 8; car index survives reload
+	if int(Save.data["unlocked"]) != 1 or not Save.car_unlocked(0) or Save.car_unlocked(4):
+		fails.append("fresh unlocks")
+	Save.record_level(2)
+	if int(Save.data["reveal"]) != Save.UNLOCK_ORDER[1] or not Save.car_unlocked(Save.UNLOCK_ORDER[1]):
+		fails.append("first unlock")
+	for k in 9:
+		Save.record_level(2)
+	if int(Save.data["unlocked"]) != Save.CARS or not Save.car_unlocked(7):
+		fails.append("unlock cap %s" % Save.data["unlocked"])
+	Save.data["car"] = 5
+	Save.write()
+	Save.load_data()
+	if typeof(Save.data["car"]) != TYPE_INT or int(Save.data["car"]) != 5 or int(Save.data["unlocked"]) != Save.CARS:
+		fails.append("car/unlocks reload")
 	for p: String in backup:
 		if backup[p] == null:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))

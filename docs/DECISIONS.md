@@ -22,3 +22,12 @@ Format: reading taken — reason — how to change.
 - **Traffic recycling:** traffic more than 120 m behind the player reappears 260–480 m ahead in a lane with room, so traffic density follows the player.
 - **Start:** the player is last on the grid (overtaking is the fun). Holding nitro through GO gives a rocket start.
 - **Car sizes are analytic** (2.0 × 4.6 m boxes in track space). Traffic is heavier in collisions, so racers bounce off it.
+
+## Rename + 4 tracks + car unlocks (user, 2026-10-19)
+- **Name: curious-for-speed** (repo github.com/MarAvFe/curious-for-speed). The local folder stays `~/web-racer` so the open workspace keeps working. Godot derives the save folder from the name, so saves now live under `curious-for-speed/`; no family save existed under the old name.
+- **Tracks 3–4:** a second city (Neon Downtown, a figure-8 with an overpass) and a non-city track (Frost Pass, snow and a frozen lake). Still no oncoming traffic.
+- **8 cars** (2 bodies × 4 liveries), all shown in one grid on the title. Locked cars are black silhouettes and can't be picked. **Every finished race unlocks the next car**, even when he repeats the same track. Grid colour order is orange, black, red, green, as the user asked. The unlock order alternates bodies within each colour (orange stinger, orange brute, black stinger, …), so the second body appears on the first win. Blue and purple stay rivals-only for variety. The newly won car is revealed on the title with a sparkle and the fanfare.
+- **Save fix:** JSON loads numbers as floats, and the type-checked merge used to reject them for integer fields, so the chosen car was never restored. Integer fields now accept floats.
+- **Overpasses:** elevated samples get no embankment, a deck underside and fascia, and pillars that stop under the deck and are skipped where they would stand on another stretch of road. Gates and barriers are placed with `flat_spot()`: on the ground and at least 70 m from any other stretch of road.
+- **Faceted props:** OCC caches a shape's first triangulation, and lofts produce B-spline faces that tessellate finely. So pines use plain cones tessellated coarsely (fresh shape per call). This took them from about 1,300 to 540 triangles.
+- **Release:** pushed over SSH with a `v0.1.0` tag. The `gh` CLI isn't installed, so the user creates the release from the tag on the web and uploads the binaries.

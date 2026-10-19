@@ -4,7 +4,10 @@ extends Node
 signal settings_changed
 
 const PATH := "user://save.json"
-const LEVEL_COUNT := 2  ## tracks
+const LEVEL_COUNT := 4  ## tracks
+const CARS := 8
+## Unlock order: alternates bodies so the second body shows up early. Car 0 is unlocked from the start.
+const UNLOCK_ORDER := [0, 4, 1, 5, 2, 6, 3, 7]
 
 var data: Dictionary = {}
 
@@ -19,7 +22,7 @@ func defaults() -> Dictionary:
 	for i in range(1, LEVEL_COUNT + 1):
 		lv[str(i)] = {"cleared": false}
 	return {
-		"version": 1, "levels": lv, "car": 0,
+		"version": 1, "levels": lv, "car": 0, "unlocked": 1, "reveal": -1,
 		"settings": {"music": 0.8, "sfx": 0.8, "speed": 1.0, "retro": true, "fullscreen": false,
 			"invert_y": false, "deadzone": 0.2, "lang": "en"},
 	}
@@ -46,6 +49,8 @@ func _merge(into: Dictionary, src: Dictionary) -> void:
 			_merge(into[k], src[k])
 		elif typeof(into[k]) == typeof(src[k]) or (typeof(into[k]) == TYPE_FLOAT and typeof(src[k]) == TYPE_INT):
 			into[k] = src[k]
+		elif typeof(into[k]) == TYPE_INT and typeof(src[k]) == TYPE_FLOAT:  # JSON numbers load as floats
+			into[k] = int(src[k])
 
 
 func write() -> void:
@@ -81,9 +86,18 @@ func level(n: int) -> Dictionary:
 	return data["levels"][str(n)]
 
 
+## Every finished race (any track, repeats too) unlocks the next car until all 8 are open.
 func record_level(n: int) -> void:
 	level(n)["cleared"] = true
+	var u := int(data["unlocked"])
+	if u < CARS:
+		data["reveal"] = UNLOCK_ORDER[u]
+		data["unlocked"] = u + 1
 	write()
+
+
+func car_unlocked(i: int) -> bool:
+	return UNLOCK_ORDER.find(i) < int(data["unlocked"])
 
 
 func apply_settings() -> void:

@@ -74,10 +74,33 @@ SHAPES = {
     "light": lambda d: d.ellipse((60, 60, 452, 452), fill="white"),
     "track_1": _track(1),
     "track_2": _track(2),
+    "track_3": _track(3),
+    "track_4": _track(4),
     "speed_1": lambda d: _chevrons(d, 1),
     "speed_2": lambda d: _chevrons(d, 2),
     "speed_3": lambda d: _chevrons(d, 3),
 }
+
+
+SELECT = 8  # selectable cars: 2 bodies x first 4 liveries (rivals also use liveries 4-5)
+
+
+def car_thumbs(out) -> list[str]:
+    """Selection-grid thumbnails rendered from the real car models (front 3/4, transparent background).
+    Locked cars are the same image tinted black in-engine."""
+    import review3d
+    names = []
+    for i in range(SELECT):
+        glb = ROOT / f"assets/cars/car_{['stinger', 'brute'][i // 4]}_{i % 4}.glb"
+        if not glb.exists():
+            continue
+        im = review3d.render(review3d.load(glb), 18, 40, size=384, bg=None)
+        im = im.crop(im.getbbox()).resize((192, 96), Image.LANCZOS) if im.getbbox() else im
+        canvas = Image.new("RGBA", (200, 104), (0, 0, 0, 0))
+        canvas.alpha_composite(im, ((200 - im.width) // 2, (104 - im.height) // 2))
+        canvas.save(out / f"icon_car_{i}.png")
+        names.append(f"icon_car_{i}")
+    return names
 
 
 def build() -> list[str]:
@@ -93,7 +116,7 @@ def build() -> list[str]:
         rim.putalpha(a.filter(ImageFilter.MaxFilter(25)))
         rim.alpha_composite(im)
         rim.resize((128, 128), Image.LANCZOS).save(out / f"icon_{name}.png")
-    return list(SHAPES)
+    return list(SHAPES) + car_thumbs(out)
 
 
 if __name__ == "__main__":

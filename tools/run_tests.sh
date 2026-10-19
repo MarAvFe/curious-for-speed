@@ -29,5 +29,5 @@ for f in tracks/track_*.json; do
   fi
 done
 command -v xvfb-run >/dev/null || row screenshots SKIP "install xvfb (sudo apt install xvfb) for invisible screenshots"
-echo; echo "== web-racer tests =="; printf '%s\n' "${ROWS[@]}"; echo
+echo; echo "== curious-for-speed tests =="; printf '%s\n' "${ROWS[@]}"; echo
 [ $FAIL = 0 ] && echo "ALL PASS" || echo "SOME FAILED"; exit $FAIL

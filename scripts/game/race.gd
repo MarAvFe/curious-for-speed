@@ -221,7 +221,7 @@ func _build_world() -> void:
 
 
 func _build_cars() -> void:
-	var mine := int(Save.data["car"]) % (Game.LIVERIES * 2)
+	var mine := Game.sel_car(int(Save.data["car"]) % Save.CARS)
 	# rivals: three other liveries, models alternate so the field looks mixed
 	var picks: Array[int] = []
 	var li := (mine + 1) % Game.LIVERIES

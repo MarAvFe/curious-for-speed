@@ -14,6 +14,20 @@
    "min_radius_m": 54,
    "tris": 99170,
    "chunks": 7
+  },
+  {
+   "track": 3,
+   "length_m": 2544,
+   "min_radius_m": 66,
+   "tris": 131364,
+   "chunks": 8
+  },
+  {
+   "track": 4,
+   "length_m": 2178,
+   "min_radius_m": 80,
+   "tris": 88296,
+   "chunks": 8
   }
  ],
  "audio": {
@@ -101,6 +115,16 @@
    "peak": -12.0,
    "rms": -26.2,
    "seam": 0.0
+  },
+  "music_downtown": {
+   "peak": -12.0,
+   "rms": -26.4,
+   "seam": 0.0005
+  },
+  "music_frost": {
+   "peak": -12.0,
+   "rms": -26.4,
+   "seam": 0.0001
   }
  },
  "icons": [
@@ -119,9 +143,19 @@
   "light",
   "track_1",
   "track_2",
+  "track_3",
+  "track_4",
   "speed_1",
   "speed_2",
-  "speed_3"
+  "speed_3",
+  "icon_car_0",
+  "icon_car_1",
+  "icon_car_2",
+  "icon_car_3",
+  "icon_car_4",
+  "icon_car_5",
+  "icon_car_6",
+  "icon_car_7"
  ],
  "fails": []
 }

@@ -213,6 +213,8 @@ MUSIC = {
     "music_title": (57, 100, [0, 8, 3, 10], 1, False),
     "music_harbor": (57, 124, [0, 0, 8, 10], 2, True),
     "music_canyon": (52, 128, [0, 3, 10, 8], 3, True),
+    "music_downtown": (54, 126, [0, 8, 5, 7], 4, True),
+    "music_frost": (59, 120, [0, 5, 8, 3], 5, True),
 }
 
 

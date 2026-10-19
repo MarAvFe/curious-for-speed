@@ -205,3 +205,54 @@ def bird():
     body = bd.scale(bd.Sphere(0.25), by=(0.7, 0.6, 1.6))
     wings = [bd.Pos(sx * 0.55, 0.05, 0) * bd.Rot(0, 0, sx * 12) * bd.Box(1.0, 0.04, 0.35) for sx in (-1, 1)]
     return bake([P(body, ["#2b2840"] * 3, 1, True)] + [P(w, ["#2b2840"] * 3, 1, True) for w in wings])
+
+
+# ---------- track 3 / 4 props ----------
+def neon_sign(pal, seed):
+    """Tall vertical sign on a pole: dark panel, glowing frame, three glowing bars (wordless)."""
+    rng = np.random.default_rng(seed)
+    neon = [pal["neon"][seed % len(pal["neon"])]] * 3
+    h = rng.uniform(9, 14)
+    parts = [P(bd.Pos(0, h / 2, 0.4) * bd.Box(0.4, h, 0.4), pal["metal"]),
+             P(bd.Pos(0, h - 3, 0) * bd.Box(2.6, 6, 0.4), pal["bld"][0])]
+    parts += [P(bd.Pos(sx * 1.35, h - 3, -0.05) * bd.Box(0.16, 6.2, 0.5), neon, 1, True) for sx in (-1, 1)]
+    for k in range(3):
+        col = [pal["neon"][(seed + k + 1) % len(pal["neon"])]] * 3
+        parts.append(P(bd.Pos(0, h - 1.2 - k * 1.8, -0.22) * bd.Box(rng.uniform(1.2, 2.2), 0.6, 0.06), col, 1, True))
+    return bake(parts, outline=0.05)
+
+
+def lowcone(r, h, y0):
+    """Cone standing on y0. Tessellate it coarsely (P(..., tol=0.5, ang=1.3)) for ~40 triangles.
+    Note OCC caches a shape's first triangulation, so a fresh shape is needed per tolerance."""
+    return bd.Pos(0, y0, 0) * bd.Cone(r, r * 0.04, h, rotation=(-90, 0, 0), align=(bd.Align.CENTER, bd.Align.CENTER, bd.Align.MIN))
+
+
+def pine(pal, seed):
+    """Stacked faceted cones with snow on the tip of each tier."""
+    rng = np.random.default_rng(seed)
+    h = rng.uniform(6, 11)
+    parts = [P(bd.Pos(0, h * 0.12, 0) * bd.Box(0.5, h * 0.25, 0.5), pal["trunk"])]
+    for k in range(3):
+        r = (1.0 - k * 0.28) * h * 0.28
+        y0 = h * (0.18 + k * 0.24)
+        parts.append(P(lowcone(r, h * 0.38, y0), pal["leaf"], tol=0.5, ang=1.3))
+        parts.append(P(lowcone(r * 0.5, h * 0.19, y0 + h * 0.19 + 0.02), pal["snow"], tol=0.5, ang=1.3))
+    return bake(parts, outline=0.05)
+
+
+def peak(pal, seed):
+    """Distant mountain: lofted irregular base up to a narrow top, snow cap on the upper third."""
+    rng = np.random.default_rng(seed)
+    n = 8
+    r0 = rng.uniform(60, 110)
+    pts = [(r0 * rng.uniform(0.75, 1.1) * math.cos(2 * math.pi * i / n), r0 * rng.uniform(0.75, 1.1) * math.sin(2 * math.pi * i / n)) for i in range(n)]
+    h = rng.uniform(70, 130)
+
+    def ring(y, k, dx=0.0):
+        return bd.Plane(origin=(dx, y, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0)) * bd.Polygon(*[(x * k, z * k) for x, z in pts], align=None)
+    lean = rng.uniform(-10, 10)
+    rock = bd.loft([ring(0, 1.0), ring(h * 0.62, 0.38, lean * 0.6), ring(h, 0.06, lean)], ruled=True)
+    snow = rock & (bd.Pos(0, h * 0.62 + 50, 0) * bd.Box(500, 100, 500))
+    rock = rock - (bd.Pos(0, h * 0.62 + 50, 0) * bd.Box(500, 100, 500))
+    return bake([P(rock, pal["rock"], 2, tol=0.5, ang=1.0), P(snow, pal["snow"], 2, tol=0.5, ang=1.0)], outline=0.4)
