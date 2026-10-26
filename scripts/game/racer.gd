@@ -7,6 +7,9 @@ const HALF_W := 1.0
 const HALF_L := 2.3
 
 var kind := "rival"  ## player | rival | traffic
+var who := -1  ## player slot (0-3) for humans, -1 otherwise
+var inp := 0.0  ## humans: smoothed steering input
+var lap := 0
 var idx := 0  ## car index (racers) -> colour
 var d := 0.0
 var x := 0.0
@@ -19,7 +22,7 @@ var boosting := false
 var colour := Color.WHITE
 var skill := 1.0
 var done := false
-var was_ahead := false  ## traffic: was it ahead of the player last frame (near-miss check)
+var ahead_of := 0  ## traffic: bit k set = was ahead of player k last frame (near-miss check)
 var bump_cd := 0.0
 var blink_t := 0.0  ## traffic: >0 while indicators flash
 var model: Node3D
@@ -29,9 +32,9 @@ var _wobble := 0.0
 var _roll := 0.0
 
 
-func setup(scene: PackedScene, k: String) -> void:
+func setup(car: Node3D, k: String) -> void:
 	kind = k
-	model = scene.instantiate()
+	model = car
 	add_child(model)
 	Game.paint(model)
 	blink = model.find_child("blink", true, false) as Node3D

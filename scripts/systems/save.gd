@@ -5,9 +5,9 @@ signal settings_changed
 
 const PATH := "user://save.json"
 const LEVEL_COUNT := 4  ## tracks
-const CARS := 8
-## Unlock order: alternates bodies so the second body shows up early. Car 0 is unlocked from the start.
-const UNLOCK_ORDER := [0, 4, 1, 5, 2, 6, 3, 7]
+const CARS := 8  ## playable shapes (Game.MODELS); every colour is always open
+## Unlock order = garage grid order. Shape 0 is unlocked from the start.
+const UNLOCK_ORDER := [0, 1, 2, 3, 4, 5, 6, 7]
 
 var data: Dictionary = {}
 
@@ -22,7 +22,7 @@ func defaults() -> Dictionary:
 	for i in range(1, LEVEL_COUNT + 1):
 		lv[str(i)] = {"cleared": false}
 	return {
-		"version": 1, "levels": lv, "car": 0, "unlocked": 1, "reveal": -1,
+		"version": 1, "levels": lv, "car": 0, "colour": 0, "unlocked": 1, "reveal": -1,
 		"settings": {"music": 0.8, "sfx": 0.8, "speed": 1.0, "retro": true, "fullscreen": false,
 			"invert_y": false, "deadzone": 0.2, "lang": "en"},
 	}

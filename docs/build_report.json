@@ -1,5 +1,106 @@
 {
- "cars": [],
+ "cars": [
+  {
+   "name": "car_stinger",
+   "tris": 13187,
+   "budget": 15000
+  },
+  {
+   "name": "car_brute",
+   "tris": 12906,
+   "budget": 15000
+  },
+  {
+   "name": "car_hatch",
+   "tris": 12645,
+   "budget": 15000
+  },
+  {
+   "name": "car_pickup",
+   "tris": 10552,
+   "budget": 15000
+  },
+  {
+   "name": "car_van",
+   "tris": 12160,
+   "budget": 15000
+  },
+  {
+   "name": "car_bubble",
+   "tris": 13789,
+   "budget": 15000
+  },
+  {
+   "name": "car_jeep",
+   "tris": 11677,
+   "budget": 15000
+  },
+  {
+   "name": "car_monster",
+   "tris": 10412,
+   "budget": 15000
+  },
+  {
+   "name": "traffic_hatch_0",
+   "tris": 4328,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_hatch_1",
+   "tris": 4328,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_hatch_2",
+   "tris": 4328,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_hatch_3",
+   "tris": 4328,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_van_0",
+   "tris": 4140,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_van_1",
+   "tris": 4140,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_van_2",
+   "tris": 4140,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_van_3",
+   "tris": 4140,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_pickup_0",
+   "tris": 4144,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_pickup_1",
+   "tris": 4144,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_pickup_2",
+   "tris": 4144,
+   "budget": 5000
+  },
+  {
+   "name": "traffic_pickup_3",
+   "tris": 4144,
+   "budget": 5000
+  }
+ ],
  "tracks": [
   {
    "track": 1,

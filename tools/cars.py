@@ -3,7 +3,7 @@ Liveries are spider webs wrapped onto the paint (tools/web.py). Origin = ground 
 from __future__ import annotations
 import math
 import build123d as bd
-from meshkit import Part, bake, mesh, export_glb, ROOT
+from meshkit import Part, bake, mesh, export_glb, darkest, ROOT
 import web
 from palette import BASE, LIVERIES, TRAFFIC
 
@@ -63,14 +63,37 @@ MODELS = {
         "cabin_top": [(-0.95, 1.3), (0.95, 1.3), (0.95, -0.8), (-0.95, -0.8)],
         "wheel": (0.9, 1.7, -1.6, 0.4), "spoiler": False, "width": 2.04, "taper": 6,
     },
+    "bubble": {  # tiny round city car
+        "side": [(1.7, 0.3), (1.72, 0.7), (1.3, 0.85), (-1.6, 0.88), (-1.72, 0.7), (-1.7, 0.3)],
+        "top": [(-0.7, 1.72), (0.7, 1.72), (0.85, 1.3), (0.85, -1.5), (0.75, -1.72), (-0.75, -1.72), (-0.85, -1.5), (-0.85, 1.3)],
+        "cabin": [(1.2, 0.82), (0.6, 1.58), (-0.6, 1.62), (-1.4, 1.3), (-1.6, 0.85), (-1.6, 0.8), (1.2, 0.8)],
+        "cabin_top": [(-0.8, 1.25), (0.8, 1.25), (0.8, -1.6), (-0.8, -1.6)],
+        "wheel": (0.75, 1.05, -1.1, 0.3), "spoiler": False, "width": 1.7, "taper": 10,
+    },
+    "jeep": {  # boxy off-roader: high clearance, upright windscreen, big wheels
+        "side": [(2.15, 0.5), (2.2, 1.15), (1.3, 1.25), (-2.1, 1.25), (-2.2, 1.2), (-2.2, 0.5)],
+        "top": [(-0.95, 2.2), (0.95, 2.2), (1.0, 1.9), (1.0, -2.2), (-1.0, -2.2), (-1.0, 1.9)],
+        "cabin": [(1.2, 1.2), (0.95, 2.0), (-1.9, 2.0), (-1.95, 1.2)],
+        "cabin_top": [(-0.92, 1.2), (0.92, 1.2), (0.92, -1.95), (-0.92, -1.95)],
+        "wheel": (0.92, 1.4, -1.4, 0.48), "spoiler": False, "width": 2.0, "taper": 3, "lift": 0.3,
+    },
+    "monster": {  # monster truck: pickup cab on giant fat tyres
+        "side": [(2.1, 0.95), (2.15, 1.45), (1.2, 1.55), (-2.1, 1.55), (-2.15, 0.95)],
+        "top": [(-0.9, 2.15), (0.9, 2.15), (0.95, 1.8), (0.95, -2.15), (-0.95, -2.15), (-0.95, 1.8)],
+        "cabin": [(1.1, 1.5), (0.6, 2.25), (-0.9, 2.28), (-1.0, 1.5)],
+        "cabin_top": [(-0.88, 1.15), (0.88, 1.15), (0.88, -1.05), (-0.88, -1.05)],
+        "wheel": (1.02, 1.4, -1.4, 0.62), "spoiler": False, "width": 1.9, "taper": 5, "lift": 0.75, "cy": 1.0, "tw": 0.5,
+    },
 }
+## Playable shapes, in garage-grid and unlock order (scripts/systems/game.gd MODELS must match).
+PLAYABLE = ["stinger", "brute", "hatch", "pickup", "van", "bubble", "jeep", "monster"]
 
 
 def build_car(model: str):
     """Returns dict of build123d parts: body, glass, tyres, rims, lights_f, lights_r, trim."""
     M = MODELS[model]
     W = M["width"]
-    body = side_prism(M["side"], W) & top_prism(M["top"], 0.0, 1.2)
+    body = side_prism(M["side"], W) & top_prism(M["top"], 0.0, 2.0)  # the side profile caps the height
     try:
         body = bd.fillet(body.edges().filter_by(bd.Axis.Z, reverse=True), 0.06)
     except Exception:
@@ -78,21 +101,22 @@ def build_car(model: str):
     wx, zf, zr, r = M["wheel"]
     for z in (zf, zr):
         body = body - bd.Pos(0, r, z) * bd.Rot(0, 90, 0) * bd.Cylinder(r + 0.04, W + 0.4)
-    glass = side_prism(M["cabin"], W) & top_prism(M["cabin_top"], 0.65, 1.4, taper=M.get("taper", 18))
+    glass = side_prism(M["cabin"], W) & top_prism(M["cabin_top"], M.get("cy", 0.65), 1.4, taper=M.get("taper", 18))
     # roof panel is paint (and carries web), the rest of the greenhouse is window
     roof_y = max(p[1] for p in M["cabin"]) - 0.05
     roofbox = bd.Pos(0, roof_y + 0.5, 0) * bd.Box(4, 1, 6)
     body = body + (glass & roofbox)
     glass = glass - roofbox
-    tyres = [wheel_at(sx * wx, z, r, 0.28) for sx in (-1, 1) for z in (zf, zr)]
-    rims = [wheel_at(sx * (wx + 0.03), z, r * 0.6, 0.26) for sx in (-1, 1) for z in (zf, zr)]
+    tw = M.get("tw", 0.28)
+    tyres = [wheel_at(sx * wx, z, r, tw) for sx in (-1, 1) for z in (zf, zr)]
+    rims = [wheel_at(sx * (wx + 0.03), z, r * 0.6, tw - 0.02) for sx in (-1, 1) for z in (zf, zr)]
     zn = max(p[1] for p in M["top"])
     zb = min(p[1] for p in M["top"])
     un = max(q[0] for q in M["side"])
     ylf = [p for p in M["side"] if p[0] > un - 0.35]
     yl = sum(p[1] for p in ylf) / len(ylf) + 0.04
     lights_f = [bd.Pos(sx * 0.62, yl, -zn + 0.02) * bd.Box(0.36, 0.1, 0.1) for sx in (-1, 1)]
-    lights_r = [bd.Pos(sx * 0.6, 0.72, -zb - 0.02) * bd.Box(0.44, 0.1, 0.1) for sx in (-1, 1)]
+    lights_r = [bd.Pos(sx * 0.6, 0.72 + M.get("lift", 0.0), -zb - 0.02) * bd.Box(0.44, 0.1, 0.1) for sx in (-1, 1)]
     trim = []
     if M["spoiler"]:
         trim.append(bd.Pos(0, 1.06, 1.95) * bd.Box(1.7, 0.06, 0.32))
@@ -105,18 +129,19 @@ def livery(parts, style: int):
     """Web strands on hood (+ roof) and both doors. style picks the web shape so cars differ."""
     body, M = parts["body"], parts["M"]
     W = M["width"]
+    ly = M.get("lift", 0.0)  # tall bodies: door/rear webs move up with the paint
     out = []
     # hood: web centred near the nose, seen from above; only on surfaces above the beltline
     segs = web.strands(spokes=8 + style, rings=4, r=1.3, sag=0.2, seed=11 + style)
     top_sk = web.sketch(segs, 0.06, TOP, centre=(0.0, 1.2 - 0.5 * style), scale=(1.0, 1.25))
-    keep_top = bd.Pos(0, 1.3, 0) * bd.Box(W - 0.2, 1.6, 6)  # inset: no stretched strands down the flanks
+    keep_top = bd.Pos(0, 1.3 + ly, 0) * bd.Box(W - 0.2, 1.6, 6)  # inset: no stretched strands down the flanks
     w1 = web.wrap(body, top_sk, 3.0, keep=keep_top)
     if w1:
         out.append(w1)
     # doors: a corner fan web from the rear wheel arch, seen from the side; below the window line
     segs = web.strands(spokes=5, rings=3, r=1.5, sag=0.22, seed=21 + style, spread=math.pi * 0.75, a0=-0.15)
-    side_sk = web.sketch(segs, 0.06, SIDE, centre=(-0.9 + 0.3 * style, 0.2))
-    keep_side = bd.Pos(0, 0.45, 0) * bd.Box(W + 1, 0.6, 6) - bd.Box(W - 0.3, 3, 6)
+    side_sk = web.sketch(segs, 0.06, SIDE, centre=(-0.9 + 0.3 * style, 0.2 + ly))
+    keep_side = bd.Pos(0, 0.45 + ly, 0) * bd.Box(W + 1, 0.6, 6) - bd.Box(W - 0.3, 3, 6)
     w2 = web.wrap(body, side_sk, W, keep=keep_side)
     if w2:
         out.append(w2)
@@ -124,13 +149,13 @@ def livery(parts, style: int):
     zb = min(p[1] for p in M["top"])  # TOP v = forward, so the rear is the most negative v
     segs = web.strands(spokes=7, rings=3, r=1.0, sag=0.2, seed=31 + style)
     trunk_sk = web.sketch(segs, 0.06, TOP, centre=(0.0, zb + 0.3), scale=(1.0, 0.8))
-    w3 = web.wrap(body, trunk_sk, 3.0, keep=bd.Pos(0, 1.3, -zb - 0.9) * bd.Box(W - 0.2, 1.6, 1.8))
+    w3 = web.wrap(body, trunk_sk, 3.0, keep=bd.Pos(0, 1.3 + ly, -zb - 0.9) * bd.Box(W - 0.2, 1.6, 1.8))
     if w3:
         out.append(w3)
     BACK = bd.Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, 0, 1))  # local (u, v) = (X, Y), seen from behind
     segs = web.strands(spokes=8, rings=3, r=0.9, sag=0.2, seed=41 + style, spread=math.pi, a0=math.pi)
-    back_sk = web.sketch(segs, 0.06, BACK, centre=(0.0, 0.85), scale=(1.1, 0.65))
-    w4 = web.wrap(body, back_sk, 6.0, keep=bd.Pos(0, 0.6, -zb - 0.2) * bd.Box(W + 1, 1.2, 0.8))
+    back_sk = web.sketch(segs, 0.06, BACK, centre=(0.0, 0.85 + ly), scale=(1.1, 0.65))
+    w4 = web.wrap(body, back_sk, 6.0, keep=bd.Pos(0, 0.6 + ly, -zb - 0.2) * bd.Box(W + 1, 1.2, 0.8))
     if w4:
         out.append(w4)
     return out
@@ -159,15 +184,29 @@ def _blinkers(p):
 BUDGET = 15_000
 
 
+def swap_keys(i: int) -> list[str]:
+    """Colours the game recolours for livery i: paint ramp, web ramp, and their outline colours (index-aligned)."""
+    _, paint, wr = LIVERIES[i]
+    return paint + wr + [darkest(paint), darkest(wr)]
+
+
+def _check_swappable():
+    """Runtime recolour matches exact colours, so livery-0 paint/web colours must be distinct and appear nowhere else."""
+    keys = [c.lower() for c in swap_keys(0)]
+    others = {c.lower() for r in BASE.values() for c in r + [darkest(r)]}
+    assert len(set(keys)) == len(keys) and not set(keys) & others, f"livery 0 colours not swappable: {keys}"
+
+
 def build() -> list[dict]:
     out = []
-    for model in ("stinger", "brute"):
+    # one glb per shape, baked in livery 0; the game swaps paint/web colours at load (Game.car)
+    _check_swappable()
+    _, paint, wr = LIVERIES[0]
+    for k, model in enumerate(PLAYABLE):
         p = build_car(model)
-        webs = {k: livery(p, k) for k in range(3)}  # web shape depends on style only; colours reuse it
-        for i, (name, paint, wr) in enumerate(LIVERIES):
-            m = bake(_parts(p, paint, wr, webs[i % 3]), outline=0.02)
-            r = export_glb(m, ROOT / f"assets/cars/car_{model}_{i}.glb", "car")
-            out.append(dict(r, name=f"car_{model}_{i}", budget=BUDGET))
+        m = bake(_parts(p, paint, wr, livery(p, k % 3)), outline=0.02)
+        r = export_glb(m, ROOT / f"assets/cars/car_{model}.glb", "car")
+        out.append(dict(r, name=f"car_{model}", budget=BUDGET))
     for model in ("hatch", "van", "pickup"):
         p = build_car(model)
         bl = _blinkers(p)

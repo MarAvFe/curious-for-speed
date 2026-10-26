@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dyqofvr6pk7eg"
-path="res://.godot/imported/car_brute_2.glb-542d4529b64eff89c85fe0e731571b91.scn"
+uid="uid://c3wxjpgx4e657"
+path="res://.godot/imported/car_bubble.glb-e21a4120c868895c62ebfb2d4b911da6.scn"
 
 [deps]
 
-source_file="res://assets/cars/car_brute_2.glb"
-dest_files=["res://.godot/imported/car_brute_2.glb-542d4529b64eff89c85fe0e731571b91.scn"]
+source_file="res://assets/cars/car_bubble.glb"
+dest_files=["res://.godot/imported/car_bubble.glb-e21a4120c868895c62ebfb2d4b911da6.scn"]
 
 [params]
 

@@ -1,6 +1,6 @@
 """One palette for everything. Deeper and more saturated than rail-shooter (dusk racing, not pastel nursery),
 still hue-shifted ramps (see meshkit.ramp). Writes assets/palette.json."""
-from meshkit import ramp, write_json, ROOT
+from meshkit import ramp, darkest, write_json, ROOT
 
 BASE = {
     "tyre": ramp(250, 0.10, 0.10, 0.32),
@@ -12,14 +12,15 @@ BASE = {
     "chrome": ramp(230, 0.06, 0.45, 0.92),
 }
 
-# Liveries: (name, paint ramp, web ramp). Webs always contrast the paint. The first 4 are pickable, in grid order.
+# Liveries: (name, paint ramp, web ramp). Webs always contrast the paint. All 6 are pickable; cars are baked in
+# livery 0 and recoloured in-engine (Game.car), so the order here is the colour-picker order.
 LIVERIES = [
     ("ember", ["#a8300f", "#e8590c", "#ff8a1f", "#ffb054", "#ffd9a0"], ramp(250, 0.10, 0.06, 0.24)),  # orange, black webs; hand-set: ramp()'s cool shift turns orange shadows red
     ("midnight", ramp(250, 0.15, 0.08, 0.30), ramp(230, 0.10, 0.75, 0.97)),   # black, white webs
     ("crimson", ramp(355, 0.75, 0.30, 0.74), ramp(250, 0.10, 0.06, 0.24)),    # red, black webs
     ("toxic", ramp(95, 0.65, 0.30, 0.78), ramp(250, 0.10, 0.06, 0.24)),       # acid green, black webs
-    ("cobalt", ramp(222, 0.70, 0.26, 0.70), ramp(230, 0.10, 0.75, 0.97)),     # blue, white webs (rivals only)
-    ("violet", ramp(278, 0.55, 0.24, 0.70), ramp(160, 0.55, 0.60, 0.92)),     # purple, mint webs (rivals only)
+    ("cobalt", ramp(222, 0.70, 0.26, 0.70), ramp(230, 0.10, 0.75, 0.97)),     # blue, white webs
+    ("violet", ramp(278, 0.55, 0.24, 0.70), ramp(160, 0.55, 0.60, 0.92)),     # purple, mint webs
 ]
 
 # Plain civilian traffic paints (no webs: racers stand out)
@@ -62,7 +63,7 @@ TRACKS = {
 
 
 def build() -> dict:
-    data = {"base": BASE, "liveries": [{"name": n, "paint": p, "web": w} for n, p, w in LIVERIES],
+    data = {"base": BASE, "liveries": [{"name": n, "paint": p, "web": w, "dark": [darkest(p), darkest(w)]} for n, p, w in LIVERIES],
             "tracks": {str(k): v for k, v in TRACKS.items()}}
     write_json(ROOT / "assets/palette.json", data)
     return data

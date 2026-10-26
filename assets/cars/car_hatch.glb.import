@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bjw4m8ob68jov"
-path="res://.godot/imported/car_brute_5.glb-126c72a06c6c580777a42fd9e9b511a8.scn"
+uid="uid://650lwedijkau"
+path="res://.godot/imported/car_hatch.glb-614e4becb3a078f5b85f363938a191da.scn"
 
 [deps]
 
-source_file="res://assets/cars/car_brute_5.glb"
-dest_files=["res://.godot/imported/car_brute_5.glb-126c72a06c6c580777a42fd9e9b511a8.scn"]
+source_file="res://assets/cars/car_hatch.glb"
+dest_files=["res://.godot/imported/car_hatch.glb-614e4becb3a078f5b85f363938a191da.scn"]
 
 [params]
 

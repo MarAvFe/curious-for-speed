@@ -55,6 +55,18 @@ def _flag(d):
     d.rectangle((120, 80, 430, 266), outline="white", width=14)
 
 
+def _players(n):
+    """n little people (head + shoulders): the player-count picker."""
+    def draw(d):
+        r = 70 if n > 2 else 90
+        for i in range(n):
+            cx = 256 + ((i % 2) - 0.5) * 220 if n > 1 else 256
+            cy = 256 + ((i // 2) - 0.5) * 230 if n > 2 else 256
+            d.ellipse((cx - r * 0.55, cy - r * 1.1, cx + r * 0.55, cy), fill="white")
+            d.pieslice((cx - r, cy + r * 0.1, cx + r, cy + r * 2.1), 180, 360, fill="white")
+    return draw
+
+
 SHAPES = {
     "play": lambda d: d.polygon([(170, 110), (410, 256), (170, 402)], fill="white"),
     "pause": lambda d: [d.rounded_rectangle(b, 30, fill="white") for b in ((140, 110, 230, 402), (282, 110, 372, 402))],
@@ -64,6 +76,7 @@ SHAPES = {
     "gear": lambda d: [d.polygon(star(256, 256, 200, 150, 8), fill="white"), d.ellipse((186, 186, 326, 326), fill=(0, 0, 0, 0))],
     "prev": lambda d: d.polygon([(340, 90), (340, 422), (120, 256)], fill="white"),
     "next": lambda d: d.polygon([(172, 90), (172, 422), (392, 256)], fill="white"),
+    **{f"players_{n}": _players(n) for n in range(1, 5)},
     "car": lambda d: [d.polygon([(40, 330), (60, 250), (170, 230), (230, 160), (360, 160), (420, 240), (472, 260), (472, 330)], fill="white"),
                       d.ellipse((90, 290, 190, 390), fill="white"), d.ellipse((330, 290, 430, 390), fill="white")],
     "flame": lambda d: [d.polygon([(256, 50), (340, 180), (380, 300), (340, 410), (256, 450), (172, 410), (132, 300), (172, 180)], fill="white"),
@@ -82,19 +95,33 @@ SHAPES = {
 }
 
 
-SELECT = 8  # selectable cars: 2 bodies x first 4 liveries (rivals also use liveries 4-5)
+
+
+THUMB_LIVERY = [2, 4, 3, 0, 5, 1, 2, 4]  # grid order: red, blue, green, orange, purple, black, red, blue
 
 
 def car_thumbs(out) -> list[str]:
-    """Selection-grid thumbnails rendered from the real car models (front 3/4, transparent background).
-    Locked cars are the same image tinted black in-engine."""
+    """Selection-grid thumbnails, one per playable shape, rendered from the real models (front 3/4, transparent
+    background) in a fixed livery each (THUMB_LIVERY) so the grid has variety; players pick their own colour after.
+    Locked shapes are the same image tinted black in-engine."""
     import review3d
+    from cars import PLAYABLE, swap_keys
+    from meshkit import hex_rgb
     names = []
-    for i in range(SELECT):
-        glb = ROOT / f"assets/cars/car_{['stinger', 'brute'][i // 4]}_{i % 4}.glb"
+    for i, shape in enumerate(PLAYABLE):
+        glb = ROOT / f"assets/cars/car_{shape}.glb"
         if not glb.exists():
             continue
-        im = review3d.render(review3d.load(glb), 18, 40, size=384, bg=None)
+        m = review3d.load(glb)
+        # same exact-colour swap the game does (Game.recolour): livery 0 -> this thumbnail's livery
+        swap = {tuple(round(c * 255) for c in hex_rgb(a)): [round(c * 255) for c in hex_rgb(b)]
+                for a, b in zip(swap_keys(0), swap_keys(THUMB_LIVERY[i]))}
+        vc = m.visual.vertex_colors
+        for v in range(len(vc)):
+            new = swap.get(tuple(int(x) for x in vc[v, :3]))
+            if new:
+                vc[v, :3] = new
+        im = review3d.render(m, 18, 40, size=384, bg=None)
         im = im.crop(im.getbbox()).resize((192, 96), Image.LANCZOS) if im.getbbox() else im
         canvas = Image.new("RGBA", (200, 104), (0, 0, 0, 0))
         canvas.alpha_composite(im, ((200 - im.width) // 2, (104 - im.height) // 2))

@@ -4,8 +4,9 @@ extends Node
 const TITLE := "res://scenes/title.tscn"
 const RACE := "res://scenes/race.tscn"
 const PARENT := "res://scenes/parent_menu.tscn"
-const MODELS := ["stinger", "brute"]
+const MODELS := ["stinger", "brute", "hatch", "pickup", "van", "bubble", "jeep", "monster"]  ## tools/cars.py PLAYABLE
 const LIVERIES := 6
+const PLAYER_COLOURS := [Color("#4ff3ff"), Color("#ff4fb5"), Color("#ffd23d"), Color("#b6ff4f")]  ## P1-P4 cursors
 
 var t := 0.0  ## one clock for every looping animation
 var level_id := 1  ## track number
@@ -16,6 +17,8 @@ var actor_mat: StandardMaterial3D  ## vertex colour + outline pass (ships, critt
 var _parent_menu: Node = null
 var _fade: ColorRect
 var palette: Dictionary
+var picks: Array[int] = []  ## car index (shape * LIVERIES + livery) per player, set in the garage; empty = solo from save
+var _recoloured := {}
 
 
 func _ready() -> void:
@@ -50,6 +53,10 @@ func _ready() -> void:
 		_snap.call_deferred()
 	if args.has("car"):
 		Save.data["car"] = int(args["car"])
+	if args.has("players"):  # --players=N: split-screen run straight into a race (with --level)
+		for k in clampi(int(args["players"]), 1, 4):
+			picks.append(((k * 3) % MODELS.size()) * LIVERIES + k)
+		Bindings.set_players(picks.size())
 	if args.has("level"):
 		level_id = int(args["level"])
 		go.call_deferred(RACE)
@@ -86,14 +93,41 @@ func start_level(n: int) -> void:
 	go(RACE)
 
 
-## Selection slot 0..7 (2 bodies x 4 liveries) -> model index in glb space (model * 6 + livery).
-func sel_car(i: int) -> int:
-	return (i / 4) * LIVERIES + i % 4
+## Player 0's car from the save (solo), as a car index.
+func saved_car() -> int:
+	return (int(Save.data["car"]) % MODELS.size()) * LIVERIES + int(Save.data["colour"]) % LIVERIES
 
 
-## Model index 0..11 -> glb path. model = i / 6, livery = i % 6 (liveries 4-5 are rivals only).
-func car_path(i: int) -> String:
-	return "res://assets/cars/car_%s_%d.glb" % [MODELS[(i / LIVERIES) % 2], i % LIVERIES]
+## Car index (shape * LIVERIES + livery) -> a new car node. Each shape's glb is baked in livery 0; other liveries
+## swap its paint/web colours (exact palette entries, checked at build time by tools/cars.py).
+func car(i: int) -> Node3D:
+	var shape := (i / LIVERIES) % MODELS.size()
+	var n: Node3D = (load("res://assets/cars/car_%s.glb" % MODELS[shape]) as PackedScene).instantiate()
+	if i % LIVERIES != 0:
+		for mi: MeshInstance3D in n.find_children("*", "MeshInstance3D", true, false):
+			var key := "%d/%s" % [i, mi.name]
+			if not _recoloured.has(key):
+				_recoloured[key] = recolour(mi.mesh, i % LIVERIES)
+			mi.mesh = _recoloured[key]
+	return n
+
+
+func recolour(m: Mesh, livery: int) -> ArrayMesh:
+	var src: Dictionary = palette["liveries"][0]
+	var dst: Dictionary = palette["liveries"][livery]
+	var swap := {}
+	for k: String in ["paint", "web", "dark"]:
+		for j in src[k].size():
+			swap[Color(src[k][j]).to_rgba32()] = Color(dst[k][j])
+	var out := ArrayMesh.new()
+	for s in m.get_surface_count():
+		var a := m.surface_get_arrays(s)
+		var c: PackedColorArray = a[Mesh.ARRAY_COLOR]
+		for v in c.size():
+			c[v] = swap.get(c[v].to_rgba32(), c[v])
+		a[Mesh.ARRAY_COLOR] = c
+		out.add_surface_from_arrays(m.surface_get_primitive_type(s), a)
+	return out
 
 
 ## Bright paint colour of a livery (HUD dots, sparks).
@@ -169,7 +203,7 @@ func _self_test() -> void:
 	for p: String in [Save.PATH, Bindings.PATH]:
 		backup[p] = FileAccess.get_file_as_string(p) if FileAccess.file_exists(p) else null
 	var honks := [0]
-	Bindings.honked.connect(func() -> void: honks[0] += 1)
+	Bindings.honked.connect(func(_who: int) -> void: honks[0] += 1)
 	# 1. unbound pad button and unbound key -> honk, nothing else
 	for ev: InputEvent in [Bindings.joy_btn(JOY_BUTTON_LEFT_SHOULDER), Bindings.key(KEY_Q)]:
 		ev.set("pressed", true)
@@ -189,6 +223,28 @@ func _self_test() -> void:
 	Bindings.reset_bindings()
 	if InputMap.event_is_action(learned, "nitro"):
 		fails.append("reset bindings")
+	# split screen: 4 keys per player, nobody else's; solo player 1 also keeps pads (any pad, not just pad 0)
+	var pad1 := Bindings.joy_btn(JOY_BUTTON_A)
+	pad1.device = 1
+	var has_key := func(c: Key, a: String) -> bool: return InputMap.event_is_action(Bindings.key(c), a)
+	Bindings.set_players(4)
+	if not has_key.call(KEY_S, "nitro@0") or has_key.call(KEY_S, "nitro@1") or not has_key.call(KEY_DOWN, "nitro@1") \
+			or not has_key.call(KEY_V, "steer_left@3") or not has_key.call(KEY_I, "honk@2") or has_key.call(KEY_SPACE, "nitro@0") \
+			or InputMap.event_is_action(pad1, "nitro@0") or not InputMap.event_is_action(pad1, "menu_accept"):
+		fails.append("per-player keys")
+	Bindings.set_players(1)
+	if not InputMap.event_is_action(pad1, "nitro@0") or not has_key.call(KEY_SPACE, "nitro@0"):
+		fails.append("solo extras")
+	# colours: a recoloured car differs from the livery-0 bake (catches import colour conversion breaking the swap)
+	var c0: MeshInstance3D = car(0).find_children("*", "MeshInstance3D", true, false)[0]
+	var c4: MeshInstance3D = car(4).find_children("*", "MeshInstance3D", true, false)[0]
+	var a0: PackedColorArray = c0.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var a4: PackedColorArray = c4.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var changed := 0
+	for i in a0.size():
+		changed += int(a0[i] != a4[i])
+	if changed < a0.size() / 10:
+		fails.append("recolour changed only %d/%d" % [changed, a0.size()])
 	# 3. corrupt and missing save -> defaults, no crash
 	var f := FileAccess.open(Save.PATH, FileAccess.WRITE)
 	f.store_string("{not json!!")
@@ -221,13 +277,6 @@ func _self_test() -> void:
 	Save.load_data()
 	if typeof(Save.data["car"]) != TYPE_INT or int(Save.data["car"]) != 5 or int(Save.data["unlocked"]) != Save.CARS:
 		fails.append("car/unlocks reload")
-	for p: String in backup:
-		if backup[p] == null:
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
-		else:
-			var w := FileAccess.open(p, FileAccess.WRITE)
-			w.store_string(backup[p])
-			w.close()
 	# 4. pause <-> parent menu flow (the stacked-pause bug): exactly one pause screen, never playable under it
 	get_tree().change_scene_to_file(RACE)
 	for i in 10:
@@ -248,5 +297,42 @@ func _self_test() -> void:
 	await get_tree().process_frame
 	if layers.call() != 0 or get_tree().paused:
 		fails.append("resume: layers=%d paused=%s" % [layers.call(), get_tree().paused])
+	# 5. garage: 2 players, ENTER, player 2 flips colour with their own key, ENTER, a track -> a 2-player race
+	get_tree().paused = false
+	Save.data["unlocked"] = 1  # fresh progress: picking 2 players must open a second vehicle
+	Save.data["reveal"] = -1
+	get_tree().change_scene_to_file(TITLE)
+	var tap := func(c: Key) -> void:
+		for down: bool in [true, false]:
+			var e := Bindings.key(c)
+			e.pressed = down
+			Input.parse_input_event(e)
+			await get_tree().process_frame
+	await get_tree().create_timer(0.6).timeout
+	await tap.call(KEY_D)  # player count menu: 1 -> 2
+	await get_tree().create_timer(0.35).timeout
+	await tap.call(KEY_ENTER)
+	await get_tree().create_timer(0.5).timeout
+	await tap.call(KEY_ENTER)  # everyone's shape
+	await get_tree().create_timer(0.5).timeout
+	await tap.call(KEY_RIGHT)  # player 2's right: next colour
+	await tap.call(KEY_ENTER)  # everyone's colour -> tracks
+	await get_tree().create_timer(0.5).timeout
+	await tap.call(KEY_ENTER)  # track 1
+	await get_tree().create_timer(1.5).timeout
+	var race := get_tree().current_scene
+	if picks.size() != 2 or picks[1] != 2 or race.get("players") == null or (race.get("players") as Array).size() != 2:
+		fails.append("garage 2p flow: picks=%s scene=%s" % [picks, race.name])
+	elif int(Save.data["unlocked"]) != 2:
+		fails.append("2 players should open 2 vehicles, unlocked=%s" % Save.data["unlocked"])
+	elif not ((race.get("views") as Array)[1]["box"] as Control).get_global_rect().position.y > 0.0:
+		fails.append("2p views overlap: player 2's view is not the bottom half")
+	for p: String in backup:
+		if backup[p] == null:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+		else:
+			var w := FileAccess.open(p, FileAccess.WRITE)
+			w.store_string(backup[p])
+			w.close()
 	print("TEST input+save+pause: ", "PASS" if fails.is_empty() else "FAIL " + ", ".join(fails))
 	get_tree().quit(0 if fails.is_empty() else 1)

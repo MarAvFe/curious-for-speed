@@ -6,6 +6,7 @@ import review3d
 import props
 from palette import TRACKS
 from meshkit import ROOT
+from cars import PLAYABLE
 
 OUT = ROOT / "docs/media"
 SHOTS = ROOT / "docs/shots"
@@ -34,10 +35,10 @@ def main():
     # gameplay: one hero shot per track
     grid([shot(f"track_{n}_{k:02d}.png") for n, k in ((1, 3), (2, 2), (3, 1), (4, 3))], 2).save(OUT / "tracks.png")
     grid([shot("title.png"), shot("reveal.png"), shot("podium_1.png")], 3).save(OUT / "flow.png")
-    # the 8 pickable cars, front and back (the chase camera shows the back all race)
+    # the 8 playable shapes, front and back (the chase camera shows the back all race)
     cars = []
     for i in range(8):
-        m = review3d.load(ROOT / f"assets/cars/car_{['stinger', 'brute'][i // 4]}_{i % 4}.glb")
+        m = review3d.load(ROOT / f"assets/cars/car_{PLAYABLE[i]}.glb")
         cars += [model(m, 18, 40), model(m, 22, 215)]
     grid(cars, 8, bg=(225, 222, 232, 255)).save(OUT / "cars.png")
     # traffic + a prop from every track

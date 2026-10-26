@@ -1,16 +1,16 @@
 extends Node3D
 ## Generic race: loads tracks/track_N.json + its kit, runs player, rivals, traffic, gates, nitro, the finish
 ## and the flat podium. Everything track-specific comes from JSON. No fail state: bumps slow you, never stop the race.
+## 1-4 humans (Game.picks) take the back of the grid, rivals fill the rest; each human gets a split-screen view.
 
 const UP := Vector3.UP
 const CRUISE := 30.0  ## m/s at speed 1.0
 const NITRO_ADD := 13.0
-const BRAKE_TO := 12.0
 const STEER_V := 11.0
 const DRIFT := 0.15  ## outward push on curves = K * v^2 * DRIFT (m/s): lean into the turn
 const LANES := [-6.75, -2.25, 2.25, 6.75]
 const TRAFFIC_MODELS := ["hatch", "van", "pickup"]
-const GRID := [Vector2(-6.0, -3.0), Vector2(-6.0, 3.0), Vector2(-16.0, -3.0), Vector2(-16.0, 3.0)]  # (d, x); player last
+const GRID := [Vector2(-6.0, -3.0), Vector2(-6.0, 3.0), Vector2(-16.0, -3.0), Vector2(-16.0, 3.0)]  # (d, x); humans last
 
 var T: Dictionary
 var L := 0.0
@@ -23,18 +23,17 @@ var tan := PackedVector3Array()
 var rig := PackedVector3Array()
 var curv := PackedFloat32Array()
 var gs := 1.0  ## game speed
-var player: Racer
+var player: Racer  ## players[0]: tests, shots, engine sound
+var players: Array[Racer] = []
 var rivals: Array[Racer] = []
 var racers: Array[Racer] = []
 var traffic: Array[Racer] = []
 var gates: Array[Dictionary] = []  ## {s, kind, ...nodes}
 var birds: Array[Dictionary] = []
-var cam: Camera3D
-var hud: Node
+var views: Array[Dictionary] = []  ## per view: racer, cam, hud (humans only), box (split screen only), look, fov, ct
 var engine: AudioStreamPlayer
 var state := "countdown"  ## countdown | race | finish | podium
 var clock := 0.0
-var inp := 0.0
 var bot: Node = null
 var bumps := 0
 var near_misses := 0
@@ -42,9 +41,6 @@ var lead_t := 0.0  ## seconds the player spent ahead of every rival (tests: over
 var honks := 0
 var pause_layer: CanvasLayer
 var _resume_t := -10.0
-var _cam_look := Vector3.ZERO
-var _fov := 70.0
-var _celebrate_t := 0.0
 var _assist := 0.0
 var _bump_times: Array[float] = []
 var _rng := RandomNumberGenerator.new()
@@ -52,7 +48,6 @@ var _sparks: CPUParticles3D
 var _fireworks: Array[CPUParticles3D] = []
 var _confetti: CPUParticles3D
 var _scrape_cd := 0.0
-var _last_lap := 0
 var frame_ms: PackedFloat32Array = []
 var _last_us := 0
 
@@ -85,15 +80,7 @@ func _ready() -> void:
 	_build_world()
 	_build_cars()
 	_build_fx()
-	cam = Camera3D.new()
-	cam.fov = _fov
-	cam.near = 0.3
-	cam.far = 1500.0
-	add_child(cam)
-	cam.make_current()
-	_cam_follow(1.0, true)
-	hud = preload("res://scripts/ui/hud.gd").new()
-	add_child(hud)
+	_build_views()
 	engine = AudioStreamPlayer.new()
 	engine.stream = AudioBus.stream("loop_engine", true)
 	engine.bus = "SFX"
@@ -221,38 +208,40 @@ func _build_world() -> void:
 
 
 func _build_cars() -> void:
-	var mine := Game.sel_car(int(Save.data["car"]) % Save.CARS)
-	# rivals: three other liveries, models alternate so the field looks mixed
-	var picks: Array[int] = []
-	var li := (mine + 1) % Game.LIVERIES
-	var model := 1 - mine / Game.LIVERIES
-	while picks.size() < 3:
-		if li != mine % Game.LIVERIES:
-			picks.append(model * Game.LIVERIES + li)
-			model = 1 - model
-		li = (li + 2) % Game.LIVERIES if picks.size() < 2 else (li + 1) % Game.LIVERIES
+	var picks: Array[int] = Game.picks.duplicate()
+	if picks.is_empty():
+		picks.append(Game.saved_car())
+	var nr := 4 - picks.size()  # rivals take the front of the grid
+	# rival colours: ones nobody picked, starting after player 1's; bodies alternate so the field looks mixed
+	var free: Array[int] = []
+	for j in range(1, Game.LIVERIES + 1):
+		var li := (picks[0] + j) % Game.LIVERIES
+		if not picks.any(func(c: int) -> bool: return c % Game.LIVERIES == li):
+			free.append(li)
 	for k in 4:
 		var r := Racer.new()
-		var ci := mine if k == 3 else picks[k]
+		var ci: int = picks[k - nr] if k >= nr else (k % 2) * Game.LIVERIES + free[k % free.size()]
 		r.idx = ci
 		r.colour = Game.car_colour(ci)
 		add_child(r)
-		r.setup(load(Game.car_path(ci)), "player" if k == 3 else "rival")
+		r.setup(Game.car(ci), "player" if k >= nr else "rival")
 		r.d = GRID[k].x
 		r.x = GRID[k].y
 		r.target_x = r.x
 		r.cruise = CRUISE * gs
 		r.skill = [1.0, 0.97, 1.02, 1.0][k]
 		racers.append(r)
-		if k == 3:
-			player = r
+		if k >= nr:
+			r.who = k - nr
+			players.append(r)
 		else:
 			rivals.append(r)
+	player = players[0]
 	var nt := int(T["traffic"])
 	for k in nt:
 		var t := Racer.new()
 		add_child(t)
-		t.setup(load("res://assets/cars/traffic_%s_%d.glb" % [TRAFFIC_MODELS[k % 3], (k / 3) % 4]), "traffic")
+		t.setup((load("res://assets/cars/traffic_%s_%d.glb" % [TRAFFIC_MODELS[k % 3], (k / 3) % 4]) as PackedScene).instantiate(), "traffic")
 		t.d = 80.0 + (L - 160.0) * float(k) / nt + _rng.randf_range(-20, 20)
 		t.x = LANES[_rng.randi() % 4]
 		t.target_x = t.x
@@ -317,6 +306,66 @@ func _build_fx() -> void:
 	(_confetti.material_override as StandardMaterial3D).albedo_color = Color.WHITE
 
 
+## One camera + HUD per human. Solo renders straight to the screen; 2 players stack, 3-4 get quarters
+## (with 3, the spare quarter follows a rival). All views share the one world.
+func _build_views() -> void:
+	var targets: Array = players.duplicate()
+	if players.size() == 3:
+		targets.append(rivals[0])
+	for r: Racer in targets:
+		var v := {"racer": r, "look": Vector3.ZERO, "fov": 70.0, "ct": 0.0}
+		var parent: Node = self
+		if targets.size() > 1:
+			var box := SubViewportContainer.new()
+			box.stretch = true
+			box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			parent = SubViewport.new()
+			box.add_child(parent)
+			add_child(box)
+			v["box"] = box
+		var cam := Camera3D.new()
+		cam.fov = 70.0
+		cam.near = 0.3
+		cam.far = 1500.0
+		parent.add_child(cam)
+		cam.make_current()
+		v["cam"] = cam
+		if r.who >= 0:
+			var hud: Node = preload("res://scripts/ui/hud.gd").new()
+			hud.set("race", self)
+			hud.set("me", r)
+			parent.add_child(hud)
+			v["hud"] = hud
+		views.append(v)
+		_cam_follow(v, 1.0, true)
+	_layout(views.size())
+
+
+## Show the first n views: 1 = full screen, 2 = top/bottom, 3-4 = quarters.
+func _layout(n: int) -> void:
+	for i in views.size():
+		var box: Control = views[i].get("box")
+		if box == null:
+			continue
+		box.visible = i < n
+		var r := Rect2(0, 0, 1, 1)
+		if n == 2:
+			r = Rect2(0, i * 0.5, 1, 0.5)
+		elif n > 2:
+			r = Rect2((i % 2) * 0.5, (i / 2) * 0.5, 0.5, 0.5)
+		# far edges first: setting top past the current bottom would push the bottom along with it
+		box.set_anchor_and_offset(SIDE_RIGHT, r.end.x, 0.0)
+		box.set_anchor_and_offset(SIDE_BOTTOM, r.end.y, 0.0)
+		box.set_anchor_and_offset(SIDE_LEFT, r.position.x, 0.0)
+		box.set_anchor_and_offset(SIDE_TOP, r.position.y, 0.0)
+
+
+func _huds(method: String, args := []) -> void:
+	for v in views:
+		if v.has("hud"):
+			(v["hud"] as Node).callv(method, args)
+
+
 # ---------------- frame ----------------
 func _process(dt: float) -> void:
 	var now := Time.get_ticks_usec()
@@ -327,17 +376,20 @@ func _process(dt: float) -> void:
 	_update_birds()
 	match state:
 		"countdown":
-			_player_input(dt)
+			for p in players:
+				_player_input(p, dt)
 			for r in racers + traffic:
 				_place(r, dt)
 			# rev the engine with nitro during the countdown: harmless fun
 			if engine:
-				engine.pitch_scale = lerpf(engine.pitch_scale, 1.25 if Input.is_action_pressed("nitro") else 0.7, 1.0 - exp(-6.0 * dt))
-			_cam_follow(dt)
+				engine.pitch_scale = lerpf(engine.pitch_scale, 1.25 if Input.is_action_pressed(Bindings.act(0, "nitro")) else 0.7, 1.0 - exp(-6.0 * dt))
+			for v in views:
+				_cam_follow(v, dt)
 		"race", "finish":
 			_assist_update(dt)
-			_player_input(dt)
-			_drive_player(dt)
+			for p in players:
+				_player_input(p, dt)
+				_drive_player(p, dt)
 			for r in rivals:
 				_drive_ai(r, dt)
 			_drive_traffic(dt)
@@ -349,45 +401,44 @@ func _process(dt: float) -> void:
 			if state == "race" and rivals.all(func(r: Racer) -> bool: return player.d > r.d):
 				lead_t += dt
 			_engine_sound(dt)
-			if state == "race":
-				_cam_follow(dt)
-			else:
-				_celebrate_cam(dt)
+			for v in views:
+				if (v["racer"] as Racer).done:
+					_celebrate_cam(v, dt)
+				else:
+					_cam_follow(v, dt)
 		"podium":
-			_podium_cam(dt)
+			_podium_cam(views[0], dt)
 	if state in ["countdown", "race"] and Input.is_action_just_pressed("pause"):
 		request_pause()
 	_restart_input(dt)
 
 
-func _player_input(dt: float) -> void:
-	var raw := Input.get_axis("steer_left", "steer_right")
-	var r := 1.0 / 0.12 if absf(raw) > absf(inp) else 1.0 / 0.08  # keyboard -> stick-like ramp
-	inp = move_toward(inp, raw, r * dt)
+func _player_input(p: Racer, dt: float) -> void:
+	var raw := Input.get_axis(Bindings.act(p.who, "steer_left"), Bindings.act(p.who, "steer_right"))
+	var r := 1.0 / 0.12 if absf(raw) > absf(p.inp) else 1.0 / 0.08  # keyboard -> stick-like ramp
+	p.inp = move_toward(p.inp, raw, r * dt)
 
 
-func _drive_player(dt: float) -> void:
-	var p := player
+func _drive_player(p: Racer, dt: float) -> void:
 	if p.done:  # after the line: autopilot cruises on
 		_drive_ai(p, dt)
 		p.speed = minf(p.speed, CRUISE * gs * 0.8)
 		return
 	var target := p.cruise
-	p.boosting = Input.is_action_pressed("nitro") and p.nitro > 0.02
+	var nitro := Bindings.act(p.who, "nitro")
+	p.boosting = Input.is_action_pressed(nitro) and p.nitro > 0.02
 	if p.boosting:
 		target += NITRO_ADD * gs
 		p.nitro = maxf(p.nitro - 0.28 * dt, 0.0)
-		if Input.is_action_just_pressed("nitro"):
+		if Input.is_action_just_pressed(nitro):
 			AudioBus.play("sfx_nitro")
-	elif Input.is_action_just_pressed("nitro"):
+	elif Input.is_action_just_pressed(nitro):
 		AudioBus.play("sfx_boop", 1.3)  # empty tank: a tiny "nope", never a punishment
-	if Input.is_action_pressed("steer_down"):
-		target = BRAKE_TO * gs
 	p.nitro = minf(p.nitro + 0.03 * dt, 1.0)
 	var k := 0.9 if target > p.speed else 2.2
 	p.speed = lerpf(p.speed, target, 1.0 - exp(-k * dt))
 	var steer_v := STEER_V * clampf(p.speed / 18.0, 0.4, 1.0)
-	p.vx = lerpf(p.vx, inp * steer_v, 1.0 - exp(-7.0 * dt))
+	p.vx = lerpf(p.vx, p.inp * steer_v, 1.0 - exp(-7.0 * dt))
 	_integrate(p, dt, DRIFT * (1.0 - 0.6 * _assist))
 
 
@@ -405,7 +456,7 @@ func _integrate(r: Racer, dt: float, drift: float) -> void:
 		r.x = clampf(r.x, -lim, lim)
 		r.vx = -signf(r.x) * 1.5
 		r.speed *= 1.0 - 0.5 * dt  # scrape: a little slower, never stopped
-		if r == player:
+		if r.who >= 0:
 			_scrape_cd -= dt
 			if _scrape_cd <= 0.0:
 				_scrape_cd = 0.25
@@ -424,7 +475,7 @@ func _gate_block(r: Racer, dt: float) -> bool:
 			continue
 		if _blocked(g, r.x):
 			if r.speed > 6.0 and r.bump(1.0):
-				if r == player:
+				if r.who >= 0:
 					AudioBus.play("sfx_bump")
 					_on_bump()
 			return true
@@ -451,7 +502,7 @@ func _update_gates(dt: float) -> void:
 			var down := 0 if ph < 0.5 else 1  # which arm is down; the other is up
 			if down != int(g["rung"]):
 				g["rung"] = down
-				if player and absf(ahead(float(g["s"]), player.s(L))) < 140.0:
+				if players.any(func(p: Racer) -> bool: return absf(ahead(float(g["s"]), p.s(L))) < 140.0):
 					AudioBus.play("sfx_bell")
 			for a in 2:
 				var want := 0.0 if a == down else 1.35
@@ -504,13 +555,14 @@ func ai_target_x(r: Racer, look := 40.0) -> float:
 func _drive_ai(r: Racer, dt: float) -> void:
 	r.target_x = ai_target_x(r)
 	r.vx = lerpf(r.vx, clampf((r.target_x - r.x) * 1.6, -8.0, 8.0), 1.0 - exp(-5.0 * dt))
-	var gap := r.d - player.d
+	var ref := _laggard()
+	var gap := r.d - ref.d if ref else 0.0
 	# asymmetric: leaders ease off a lot, chasers barely speed up, so an overtake can be held (with nitro)
-	var band := clampf(1.0 - gap / 450.0, 0.88, 1.04) if not player.done else 1.0
+	var band := clampf(1.0 - gap / 450.0, 0.88, 1.04) if ref else 1.0
 	if r.kind == "rival" and _assist > 0.0 and gap > 0.0:
 		band -= 0.06 * _assist  # player struggling: rivals ease off a touch
 	var target := r.cruise * r.skill * band
-	r.boosting = r.kind == "rival" and gap < -40.0 and r.nitro > 0.3 and not player.done
+	r.boosting = r.kind == "rival" and gap < -40.0 and r.nitro > 0.3 and ref != null
 	if r.boosting:
 		target += NITRO_ADD * gs * 0.8
 		r.nitro -= 0.25 * dt
@@ -526,8 +578,17 @@ func _drive_ai(r: Racer, dt: float) -> void:
 	_integrate(r, dt, DRIFT * 0.5)
 
 
+## The human furthest back who is still racing (null once all finished). Rivals rubber-band to them,
+## so with several players nobody is left alone at the back.
+func _laggard() -> Racer:
+	var out: Racer = null
+	for p in players:
+		if not p.done and (out == null or p.d < out.d):
+			out = p
+	return out
+
+
 func _drive_traffic(dt: float) -> void:
-	var ps := player.s(L)
 	for t in traffic:
 		var s := t.s(L)
 		var target := t.cruise
@@ -548,10 +609,9 @@ func _drive_traffic(dt: float) -> void:
 		t.x += t.vx * dt
 		if not _gate_block(t, dt):
 			t.d += t.speed * dt
-		# recycle: traffic far behind the player reappears ahead, in a lane with room
-		var rel := ahead(t.s(L), ps)
-		if rel < -120.0 and state == "race":
-			_respawn_traffic(t, ps)
+		# recycle: traffic far behind every player reappears ahead of one of them, in a lane with room
+		if state == "race" and players.all(func(p: Racer) -> bool: return ahead(t.s(L), p.s(L)) < -120.0):
+			_respawn_traffic(t, players[_rng.randi() % players.size()].s(L))
 
 
 func _respawn_traffic(t: Racer, ps: float) -> void:
@@ -571,7 +631,7 @@ func _respawn_traffic(t: Racer, ps: float) -> void:
 			t.x = lane
 			t.target_x = lane
 			t.speed = t.cruise
-			t.was_ahead = true
+			t.ahead_of = 0
 			return
 
 
@@ -601,26 +661,28 @@ func _collide() -> void:
 				back.speed = minf(back.speed, front.speed * 0.9)
 				var hit_a := a.bump()
 				var hit_b := b.bump()
-				if (a == player and hit_a) or (b == player and hit_b):
+				if (a.who >= 0 and hit_a) or (b.who >= 0 and hit_b):
 					AudioBus.play("sfx_bump")
 					_on_bump()
-	if state != "race":
-		return
-	var ps := player.s(L)
-	for t in traffic:  # near miss: overtake traffic close by without touching -> nitro + swish
-		var rel := ahead(t.s(L), ps)
-		var now_ahead := rel > 0.0
-		if t.was_ahead and not now_ahead and rel > -6.0:
-			var gap := absf(t.x - player.x) - Racer.HALF_W * 2.0
-			if gap > 0.0 and gap < 1.6 and player.speed > t.speed + 4.0:
-				player.nitro = minf(player.nitro + 0.2, 1.0)
-				near_misses += 1
-				AudioBus.play("sfx_whoosh", randf_range(0.95, 1.1))
-		t.was_ahead = now_ahead
-	for r in rivals:  # drafting: tuck in behind a rival to fill the tank
-		var a := ahead(r.s(L), ps)
-		if a > 4.0 and a < 18.0 and absf(r.x - player.x) < 1.8:
-			player.nitro = minf(player.nitro + 0.12 * get_process_delta_time(), 1.0)
+	for p in players:
+		if p.done:
+			continue
+		var ps := p.s(L)
+		var bit := 1 << p.who
+		for t in traffic:  # near miss: overtake traffic close by without touching -> nitro + swish
+			var rel := ahead(t.s(L), ps)
+			var now_ahead := rel > 0.0
+			if t.ahead_of & bit and not now_ahead and rel > -6.0:
+				var gap := absf(t.x - p.x) - Racer.HALF_W * 2.0
+				if gap > 0.0 and gap < 1.6 and p.speed > t.speed + 4.0:
+					p.nitro = minf(p.nitro + 0.2, 1.0)
+					near_misses += 1
+					AudioBus.play("sfx_whoosh", randf_range(0.95, 1.1))
+			t.ahead_of = (t.ahead_of | bit) if now_ahead else (t.ahead_of & ~bit)
+		for r in racers:  # drafting: tuck in behind another racer to fill the tank
+			var a := ahead(r.s(L), ps)
+			if r != p and a > 4.0 and a < 18.0 and absf(r.x - p.x) < 1.8:
+				p.nitro = minf(p.nitro + 0.12 * get_process_delta_time(), 1.0)
 
 
 func _place(r: Racer, dt: float) -> void:
@@ -633,29 +695,30 @@ func _countdown() -> void:
 	state = "countdown"
 	for k in 3:
 		await get_tree().create_timer(1.0).timeout
-		hud.call("lights", k + 1)
+		_huds("lights", [k + 1])
 		AudioBus.play("sfx_beep_low")
 	await get_tree().create_timer(1.0).timeout
-	hud.call("lights", 4)
+	_huds("lights", [4])
 	AudioBus.play("sfx_beep_high")
 	state = "race"
-	var boost := Input.is_action_pressed("nitro")  # holding nitro through GO = a rocket start
-	player.speed = 12.0 * gs if boost else 4.0 * gs
+	for p in players:  # holding nitro through GO = a rocket start
+		p.speed = 12.0 * gs if Input.is_action_pressed(Bindings.act(p.who, "nitro")) else 4.0 * gs
 	for r in rivals:
 		r.speed = 6.0 * gs
 	await get_tree().create_timer(1.2).timeout
-	hud.call("lights", 0)
+	_huds("lights", [0])
 
 
 func _laps() -> void:
-	if player.done:
-		return
-	var lap := int(floorf(player.d / L))
-	if lap > _last_lap and lap < laps:
-		AudioBus.play("sfx_lap")
-	_last_lap = lap
-	if player.d >= laps * L:
-		_finish()
+	for p in players:
+		if p.done:
+			continue
+		var lap := int(floorf(p.d / L))
+		if lap > p.lap and lap < laps:
+			AudioBus.play("sfx_lap")
+		p.lap = lap
+		if p.d >= laps * L:
+			_finish(p)
 
 
 func progress(r: Racer) -> float:
@@ -664,13 +727,17 @@ func progress(r: Racer) -> float:
 	return clampf(r.d / (laps * L), 0.0, 1.0)
 
 
-func _finish() -> void:
-	player.done = true
-	player.boosting = false
-	state = "finish"
-	_celebrate_t = 0.0
+## A player crossed the line: their view swings round and they cruise on. Fireworks + podium once everyone is in.
+func _finish(p: Racer) -> void:
+	p.done = true
+	p.boosting = false
 	AudioBus.play("sfx_fanfare")
-	hud.call("celebrate")
+	for v in views:
+		if v["racer"] == p:
+			(v["hud"] as Node).call("celebrate")
+	if not players.all(func(q: Racer) -> bool: return q.done):
+		return
+	state = "finish"
 	if bot:  # tests never touch the family's progress
 		Game.quit_bot(result())
 		return
@@ -678,7 +745,8 @@ func _finish() -> void:
 	for k in 6:
 		await get_tree().create_timer(0.7).timeout
 		var f := _fireworks[k % _fireworks.size()]
-		f.global_position = player.global_position + tangent(player.s(L)) * -40.0 + right(player.s(L)) * _rng.randf_range(-20, 20) + UP * _rng.randf_range(18, 28)
+		var q := players[k % players.size()]  # every view gets fireworks
+		f.global_position = q.global_position + tangent(q.s(L)) * -40.0 + right(q.s(L)) * _rng.randf_range(-20, 20) + UP * _rng.randf_range(18, 28)
 		f.restart()
 		AudioBus.play("sfx_pop", randf_range(0.85, 1.15))
 	await get_tree().create_timer(1.2).timeout
@@ -689,9 +757,10 @@ func _finish() -> void:
 func _podium() -> void:
 	Game.fade(func() -> void:
 		state = "podium"
-		_celebrate_t = 0.0
+		views[0]["ct"] = 0.0
+		_layout(1)
 		var s0 := 34.0
-		var order := [0, 1, 3, 2]  # player in a middle slot
+		var order := [0, 1, 3, 2]  # player 1 in a middle slot
 		for k in 4:
 			var r := racers[order[k]]
 			r.done = true
@@ -705,8 +774,8 @@ func _podium() -> void:
 			t.visible = false
 		_confetti.global_position = world(s0, 0.0, 12.0)
 		_confetti.emitting = true
-		_podium_cam(1.0, true)
-		hud.call("podium")
+		_podium_cam(views[0], 1.0, true)
+		_huds("podium")
 		engine.stop())
 	await get_tree().create_timer(2.0).timeout
 	for k in 4:
@@ -720,39 +789,44 @@ func _podium() -> void:
 
 
 # ---------------- camera ----------------
-func _cam_follow(dt: float, snap := false) -> void:
-	var s := player.s(L)
+func _cam_follow(v: Dictionary, dt: float, snap := false) -> void:
+	var r: Racer = v["racer"]
+	var cam: Camera3D = v["cam"]
+	var s := r.s(L)
 	var t := tangent(s)
-	var p := player.global_position
-	var want := p - t * 7.5 + UP * 2.9 - right(s) * player.x * 0.15
-	var look := world(s + 14.0, player.x * 0.6, 1.2)
+	var p := r.global_position
+	var want := p - t * 7.5 + UP * 2.9 - right(s) * r.x * 0.15
+	var look := world(s + 14.0, r.x * 0.6, 1.2)
 	var kp := 1.0 if snap else 1.0 - exp(-dt / 0.1)
 	var kr := 1.0 if snap else 1.0 - exp(-dt / 0.18)
 	cam.global_position = cam.global_position.lerp(want, kp)
-	_cam_look = _cam_look.lerp(look, kr)
-	cam.look_at(_cam_look, UP)
-	var fast := clampf((player.speed - CRUISE * gs) / (NITRO_ADD * gs), 0.0, 1.0)
-	_fov = lerpf(_fov, 70.0 + 9.0 * fast, 1.0 - exp(-3.0 * dt)) if not snap else 70.0
-	cam.fov = _fov
+	v["look"] = (v["look"] as Vector3).lerp(look, kr)
+	cam.look_at(v["look"], UP)
+	var fast := clampf((r.speed - CRUISE * gs) / (NITRO_ADD * gs), 0.0, 1.0)
+	v["fov"] = lerpf(v["fov"], 70.0 + 9.0 * fast, 1.0 - exp(-3.0 * dt)) if not snap else 70.0
+	cam.fov = v["fov"]
 
 
 ## After the line: the camera swings round to a front three-quarter view. Eased, no roll.
-func _celebrate_cam(dt: float) -> void:
-	_celebrate_t += dt
-	var k := clampf(_celebrate_t / 4.0, 0.0, 1.0)
+func _celebrate_cam(v: Dictionary, dt: float) -> void:
+	var r: Racer = v["racer"]
+	var cam: Camera3D = v["cam"]
+	v["ct"] += dt
+	var k := clampf(v["ct"] / 4.0, 0.0, 1.0)
 	var angle := deg_to_rad(140.0) * (k * k * (3.0 - 2.0 * k))
-	var s := player.s(L)
+	var s := r.s(L)
 	var base := -tangent(s) * 9.0 + UP * (3.0 - 1.0 * k)
-	var want := player.global_position + base.rotated(UP, angle)
+	var want := r.global_position + base.rotated(UP, angle)
 	cam.global_position = cam.global_position.lerp(want, 1.0 - exp(-dt / 0.08))
-	_cam_look = _cam_look.lerp(player.global_position + UP * 0.8, 1.0 - exp(-dt / 0.15))
-	cam.look_at(_cam_look, UP)
+	v["look"] = (v["look"] as Vector3).lerp(r.global_position + UP * 0.8, 1.0 - exp(-dt / 0.15))
+	cam.look_at(v["look"], UP)
 
 
-func _podium_cam(dt: float, snap := false) -> void:
-	_celebrate_t += dt
+func _podium_cam(v: Dictionary, dt: float, snap := false) -> void:
+	var cam: Camera3D = v["cam"]
+	v["ct"] += dt
 	var s0 := 34.0
-	var sway := sin(_celebrate_t * 0.35) * 6.0
+	var sway := sin(v["ct"] * 0.35) * 6.0
 	var want := world(s0 + 17.0, sway, 3.2)
 	cam.global_position = want if snap else cam.global_position.lerp(want, 1.0 - exp(-dt / 0.3))
 	cam.look_at(world(s0, 0.0, 0.9), UP)
@@ -786,19 +860,20 @@ func _engine_sound(dt: float) -> void:
 
 
 # ---------------- input extras ----------------
-func _on_honk() -> void:
-	if get_tree().paused or state == "podium":
+func _on_honk(who := 0) -> void:
+	if get_tree().paused or state == "podium" or who >= players.size():
 		return
+	var me := players[who]
 	AudioBus.play("sfx_honk", randf_range(0.97, 1.04))
 	honks += 1
 	if state != "race":
 		return
 	# traffic ahead in your way moves over a lane, hazards flashing
-	var ps := player.s(L)
+	var ps := me.s(L)
 	for t in traffic:
 		var a := ahead(t.s(L), ps)
-		if a > 0.0 and a < 80.0 and absf(t.x - player.x) < 3.5:
-			var away := signf(t.x - player.x) if absf(t.x - player.x) > 0.5 else (1.0 if t.x < 0.0 else -1.0)
+		if a > 0.0 and a < 80.0 and absf(t.x - me.x) < 3.5:
+			var away := signf(t.x - me.x) if absf(t.x - me.x) > 0.5 else (1.0 if t.x < 0.0 else -1.0)
 			var li := LANES.find(_nearest_lane(t.x))
 			var ni := clampi(li + int(away), 0, 3)
 			if ni == li:
@@ -916,7 +991,7 @@ func result() -> Dictionary:
 	for v in frame_ms:
 		avg += v
 	avg /= maxf(frame_ms.size(), 1)
-	return {"ok": player.done, "track": Game.level_id, "time_s": snappedf(clock, 0.1), "bumps": bumps,
+	return {"ok": players.all(func(p: Racer) -> bool: return p.done), "players": players.size(), "track": Game.level_id, "time_s": snappedf(clock, 0.1), "bumps": bumps,
 		"near_misses": near_misses, "honks": honks, "lead_s": snappedf(lead_t, 0.1),
 		"rival_progress": rivals.map(func(r: Racer) -> float: return snappedf(progress(r), 0.01)),
 		"frame_ms_avg": snappedf(avg, 0.01),
@@ -942,7 +1017,7 @@ func _shot_tour() -> void:
 		rivals[0].x = -3.0
 		for r in racers + traffic:
 			_place(r, 0.016)
-		_cam_follow(1.0, true)
+		_cam_follow(views[0], 1.0, true)
 		for k in 30:
 			_update_gates(0.016)
 			await get_tree().process_frame

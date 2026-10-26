@@ -1,10 +1,19 @@
 extends Node
 ## The only place that knows about devices. Game code uses named actions only.
 ## Unknown/unbound buttons become a harmless honk. Parent-menu hold gesture lives here.
+## Split screen: every player has 4 keys (left, right, up = horn, down = nitro); pads get mapped onto those keys
+## outside the game. act(k, "nitro") names player k's copy of an action. Solo, player 1 also keeps every pad,
+## the learned bindings and the old extra keys (arrows, Space, H).
 
-signal honked
+signal honked(who: int)  ## who = player whose horn key was pressed (0 for unbound buttons)
 signal parent_menu_requested
 
+## Per player: left, right, up (horn), down (nitro).
+const PLAYER_KEYS := [[KEY_A, KEY_D, KEY_W, KEY_S], [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN],
+	[KEY_J, KEY_L, KEY_I, KEY_K], [KEY_V, KEY_N, KEY_G, KEY_B]]
+## Per-player actions -> which of the player's 4 keys.
+const SLOT := {"steer_left": 0, "steer_right": 1, "honk": 2, "nitro": 3,
+	"menu_left": 0, "menu_right": 1, "menu_up": 2, "menu_down": 3}
 const PATH := "user://bindings.json"
 const STEER := ["steer_left", "steer_right", "steer_up", "steer_down"]
 const ACTIONS := ["steer_left", "steer_right", "steer_up", "steer_down", "nitro", "honk", "pause", "restart",
@@ -13,6 +22,7 @@ const HOLD_TIME := 3.0
 
 var _hold := 0.0
 var _custom: Dictionary = {}  # action -> Array of serialized events (overrides defaults)
+var players := 1
 
 
 func _ready() -> void:
@@ -50,12 +60,13 @@ func default_events() -> Dictionary:
 		"honk": [key(KEY_H), joy_btn(JOY_BUTTON_B), joy_btn(JOY_BUTTON_X), joy_btn(JOY_BUTTON_Y)],
 		"pause": [key(KEY_ESCAPE), joy_btn(JOY_BUTTON_START)],
 		"restart": [key(KEY_R)],
-		"menu_accept": [key(KEY_ENTER), key(KEY_SPACE), joy_btn(JOY_BUTTON_A)],
-		"menu_back": [key(KEY_BACKSPACE), key(KEY_ESCAPE)],
-		"menu_left": [key(KEY_A), key(KEY_LEFT), joy_axis(JOY_AXIS_LEFT_X, -1.0), joy_btn(JOY_BUTTON_DPAD_LEFT)],
-		"menu_right": [key(KEY_D), key(KEY_RIGHT), joy_axis(JOY_AXIS_LEFT_X, 1.0), joy_btn(JOY_BUTTON_DPAD_RIGHT)],
-		"menu_up": [key(KEY_W), key(KEY_UP), joy_axis(JOY_AXIS_LEFT_Y, -1.0), joy_btn(JOY_BUTTON_DPAD_UP)],
-		"menu_down": [key(KEY_S), key(KEY_DOWN), joy_axis(JOY_AXIS_LEFT_Y, 1.0), joy_btn(JOY_BUTTON_DPAD_DOWN)],
+		"menu_accept": [key(KEY_ENTER), key(KEY_KP_ENTER), key(KEY_SPACE), joy_btn(JOY_BUTTON_A)],
+		"menu_back": [key(KEY_BACKSPACE), key(KEY_ESCAPE), joy_btn(JOY_BUTTON_B)],
+		# shared menus (player count, tracks, pause) answer every player's keys
+		"menu_left": [key(KEY_A), key(KEY_LEFT), key(KEY_J), key(KEY_V), joy_axis(JOY_AXIS_LEFT_X, -1.0), joy_btn(JOY_BUTTON_DPAD_LEFT)],
+		"menu_right": [key(KEY_D), key(KEY_RIGHT), key(KEY_L), key(KEY_N), joy_axis(JOY_AXIS_LEFT_X, 1.0), joy_btn(JOY_BUTTON_DPAD_RIGHT)],
+		"menu_up": [key(KEY_W), key(KEY_UP), key(KEY_I), key(KEY_G), joy_axis(JOY_AXIS_LEFT_Y, -1.0), joy_btn(JOY_BUTTON_DPAD_UP)],
+		"menu_down": [key(KEY_S), key(KEY_DOWN), key(KEY_K), key(KEY_B), joy_axis(JOY_AXIS_LEFT_Y, 1.0), joy_btn(JOY_BUTTON_DPAD_DOWN)],
 		"parent_menu_hold": [key(KEY_F1)],
 	}
 
@@ -63,10 +74,14 @@ func default_events() -> Dictionary:
 func rebuild() -> void:
 	var dz := float(Save.setting("deadzone"))
 	var defs := default_events()
+	for a: StringName in InputMap.get_actions():
+		if "@" in str(a):
+			InputMap.erase_action(a)
 	for a: String in ACTIONS:
 		if InputMap.has_action(a):
 			InputMap.erase_action(a)
-		InputMap.add_action(a, dz if a in STEER or a.begins_with("menu_") else 0.5)
+		var adz := dz if a in STEER or a.begins_with("menu_") else 0.5
+		InputMap.add_action(a, adz)
 		var evs: Array = defs[a]
 		if _custom.has(a):
 			evs = []
@@ -75,7 +90,27 @@ func rebuild() -> void:
 				if e != null:
 					evs.append(e)
 		for e: InputEvent in evs:
-			InputMap.action_add_event(a, e)
+			var ae: InputEvent = e if e is InputEventKey else e.duplicate()
+			ae.device = -1 if not ae is InputEventKey else ae.device  # every pad, not just pad 0
+			InputMap.action_add_event(a, ae)
+		if not SLOT.has(a):
+			continue
+		for k in PLAYER_KEYS.size():
+			InputMap.add_action(act(k, a), adz)
+			InputMap.action_add_event(act(k, a), key(PLAYER_KEYS[k][SLOT[a]]))
+			if k == 0 and players == 1:  # solo: player 1 also gets pads, learned bindings, extra keys
+				for e: InputEvent in InputMap.action_get_events(a):
+					InputMap.action_add_event(act(k, a), e)
+
+
+## Player k's name for an action.
+func act(k: int, a: String) -> String:
+	return "%s@%d" % [a, k]
+
+
+func set_players(n: int) -> void:
+	players = n
+	rebuild()
 
 
 ## Bind one learned event to an action (learn mode). Keyboard defaults stay usable.
@@ -144,12 +179,13 @@ func is_known(ev: InputEvent) -> bool:
 func _input(ev: InputEvent) -> void:
 	if ev.is_echo():
 		return
-	if ev.is_action_pressed("honk"):
-		honked.emit()
-		return
+	for k in PLAYER_KEYS.size():
+		if ev.is_action_pressed(act(k, "honk")):
+			honked.emit(k)
+			return
 	var is_press := (ev is InputEventKey and ev.is_pressed()) or (ev is InputEventJoypadButton and ev.is_pressed())
 	if is_press and not is_known(ev):
-		honked.emit()  # any unbound button: harmless and fun
+		honked.emit(0)  # any unbound button: harmless and fun
 
 
 func _process(delta: float) -> void:

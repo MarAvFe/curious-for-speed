@@ -1,7 +1,9 @@
 extends CanvasLayer
 ## Wordless HUD. Top: one flat bar from start flag to finish flag with every racer on it (no places, no numbers);
-## a tick marks the lap. Bottom right: nitro tank. Centre: start lights.
+## a tick marks the lap. Bottom right: nitro tank. Centre: start lights. One per split-screen view.
 
+var race: Node
+var me: Racer  ## whose nitro tank this shows; drawn biggest on the bar
 var _bar: Control
 var _lights := 0
 var _celebrate := 0.0
@@ -24,7 +26,7 @@ func _process(_dt: float) -> void:
 
 
 func _draw_hud() -> void:
-	var r := get_parent()
+	var r := race
 	var vs := _bar.get_viewport_rect().size
 	var u := vs.y / 360.0  # works in retro (640x360) and full (1280x720)
 	# ---- progress bar ----
@@ -40,7 +42,7 @@ func _draw_hud() -> void:
 	var fs := 22.0 * u
 	_bar.draw_texture_rect(_tex["flag"], Rect2(Vector2(x1 + 4 * u, y - fs * 0.8), Vector2(fs, fs)), false)
 	var racers: Array = r.get("racers")
-	var player: Node = r.get("player")
+	var player: Racer = me
 	var slot := 0
 	for rc: Racer in racers:  # rivals first, player drawn last (on top)
 		if rc == player:

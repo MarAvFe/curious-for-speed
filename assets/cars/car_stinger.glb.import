@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://drrqyntce5enk"
-path="res://.godot/imported/car_stinger_3.glb-60e13720360980ff38cfe30a6e48ebfb.scn"
+uid="uid://bw4524hmkd86a"
+path="res://.godot/imported/car_stinger.glb-d5a26ae41e62ceb8cf452e1935a82f45.scn"
 
 [deps]
 
-source_file="res://assets/cars/car_stinger_3.glb"
-dest_files=["res://.godot/imported/car_stinger_3.glb-60e13720360980ff38cfe30a6e48ebfb.scn"]
+source_file="res://assets/cars/car_stinger.glb"
+dest_files=["res://.godot/imported/car_stinger.glb-d5a26ae41e62ceb8cf452e1935a82f45.scn"]
 
 [params]
 

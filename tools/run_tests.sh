@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One command: rebuild assets (budget/geometry/audio asserts), import, compile-check, input/save self-test,
-# good+bad bots on every track. Screenshots only run on an invisible display (xvfb-run), never on your screen.
+# good+bad bots on every track, a 4-player split-screen race. Screenshots only run on an invisible display (xvfb-run), never on your screen.
 # Usage: tools/run_tests.sh [--no-build] [--no-cars]
 cd "$(dirname "$0")/.." || exit 1
 GODOT=${GODOT:-godot}
@@ -28,6 +28,10 @@ for f in tracks/track_*.json; do
       && row "track $n screenshots" PASS "docs/shots/track_${n}_*.png" || row "track $n screenshots" FAIL ""
   fi
 done
+# split screen: 4 humans, the good bot drives each through their own 4-key actions
+out=$(timeout 600 $GODOT --headless --path . --fixed-fps 60 -- --level=3 --players=4 --bot=good --speed=1.0 2>&1)
+res=$(echo "$out" | grep BOT_RESULT | cut -d' ' -f2-); errs=$(echo "$out" | grep -c "SCRIPT ERROR")
+[[ $res == *'"ok":true'*'"players":4'* && $errs == 0 ]] && row "track 3 bot:4 players" PASS "$res" || row "track 3 bot:4 players" FAIL "errors=$errs $res"
 command -v xvfb-run >/dev/null || row screenshots SKIP "install xvfb (sudo apt install xvfb) for invisible screenshots"
 echo; echo "== curious-for-speed tests =="; printf '%s\n' "${ROWS[@]}"; echo
 [ $FAIL = 0 ] && echo "ALL PASS" || echo "SOME FAILED"; exit $FAIL

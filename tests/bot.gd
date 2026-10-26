@@ -1,6 +1,7 @@
 extends Node
 ## Bot drivers use ONLY input actions, exercising the real code paths.
 ## good: steers toward the AI's chosen line, nitro on clear road, honks at traffic. bad: random holds and mashing.
+## Split screen (--players=N): the good bot drives every player through their own actions.
 
 var runner: Node
 var bad := false
@@ -27,7 +28,6 @@ func _process(dt: float) -> void:
 	if _timeout > 600.0:
 		Game.quit_bot({"ok": false, "why": "timeout", "d": runner.get("player").d})
 		return
-	var p: Racer = runner.get("player")
 	if bad:
 		_t -= dt
 		if _t <= 0.0:
@@ -36,21 +36,22 @@ func _process(dt: float) -> void:
 			_nitro = _rng.randf() < 0.5
 			if _rng.randf() < 0.3:
 				Input.parse_input_event(_key_event())
-		_press("steer_left", _dir < 0.0)
-		_press("steer_right", _dir > 0.0)
-		_press("nitro", _nitro)
-		_press("steer_down", _rng.randf() < 0.02)
+		_press(Bindings.act(0, "steer_left"), _dir < 0.0)
+		_press(Bindings.act(0, "steer_right"), _dir > 0.0)
+		_press(Bindings.act(0, "nitro"), _nitro)
 		return
-	var want: float = runner.call("ai_target_x", p)
-	var err := want - p.x
-	var k := clampf(absf(err) / 2.0, 0.0, 1.0)
-	_press("steer_left", err < -0.3, k)
-	_press("steer_right", err > 0.3, k)
-	_press("nitro", p.nitro > 0.5 and absf(err) < 1.0)
+	for p: Racer in runner.get("players"):
+		var want: float = runner.call("ai_target_x", p)
+		var err := want - p.x
+		var k := clampf(absf(err) / 2.0, 0.0, 1.0)
+		_press(Bindings.act(p.who, "steer_left"), err < -0.3, k)
+		_press(Bindings.act(p.who, "steer_right"), err > 0.3, k)
+		_press(Bindings.act(p.who, "nitro"), p.nitro > 0.5 and absf(err) < 1.0)
 	_t -= dt
 	if _t <= 0.0:
 		_t = 4.0
-		Input.parse_input_event(_honk_event())
+		for p: Racer in runner.get("players"):
+			Input.parse_input_event(_honk_event(p.who))
 
 
 func _key_event() -> InputEventKey:  # unbound key -> honk path
@@ -60,8 +61,8 @@ func _key_event() -> InputEventKey:  # unbound key -> honk path
 	return e
 
 
-func _honk_event() -> InputEventAction:
+func _honk_event(who: int) -> InputEventAction:
 	var e := InputEventAction.new()
-	e.action = "honk"
+	e.action = Bindings.act(who, "honk")
 	e.pressed = true
 	return e
