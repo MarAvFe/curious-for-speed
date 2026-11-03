@@ -2,7 +2,7 @@
 import json, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-import palette, cars, tracks, audiokit, icons, review3d
+import palette, cars, tracks, audiokit, music, icons, review3d
 from meshkit import ROOT
 
 
@@ -19,6 +19,7 @@ def main() -> int:
         if r["tris"] > tracks.TRACK_TRIS:
             fails.append(f"track {r['track']}: {r['tris']} tris")
     au = audiokit.build()
+    au.update(music.build())
     ic = icons.build()
     if "--review" in sys.argv:
         for g in sorted((ROOT / "assets/cars").glob("*.glb")):

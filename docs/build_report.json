@@ -1,106 +1,5 @@
 {
- "cars": [
-  {
-   "name": "car_stinger",
-   "tris": 13187,
-   "budget": 15000
-  },
-  {
-   "name": "car_brute",
-   "tris": 12906,
-   "budget": 15000
-  },
-  {
-   "name": "car_hatch",
-   "tris": 12645,
-   "budget": 15000
-  },
-  {
-   "name": "car_pickup",
-   "tris": 10552,
-   "budget": 15000
-  },
-  {
-   "name": "car_van",
-   "tris": 12160,
-   "budget": 15000
-  },
-  {
-   "name": "car_bubble",
-   "tris": 13789,
-   "budget": 15000
-  },
-  {
-   "name": "car_jeep",
-   "tris": 11677,
-   "budget": 15000
-  },
-  {
-   "name": "car_monster",
-   "tris": 10412,
-   "budget": 15000
-  },
-  {
-   "name": "traffic_hatch_0",
-   "tris": 4328,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_hatch_1",
-   "tris": 4328,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_hatch_2",
-   "tris": 4328,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_hatch_3",
-   "tris": 4328,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_van_0",
-   "tris": 4140,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_van_1",
-   "tris": 4140,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_van_2",
-   "tris": 4140,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_van_3",
-   "tris": 4140,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_pickup_0",
-   "tris": 4144,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_pickup_1",
-   "tris": 4144,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_pickup_2",
-   "tris": 4144,
-   "budget": 5000
-  },
-  {
-   "name": "traffic_pickup_3",
-   "tris": 4144,
-   "budget": 5000
-  }
- ],
+ "cars": [],
  "tracks": [
   {
    "track": 1,
@@ -203,29 +102,34 @@
    "seam": 0.0001
   },
   "music_title": {
-   "peak": -12.0,
-   "rms": -24.1,
-   "seam": 0.0028
+   "title": "Disconnected",
+   "lufs": -18.0,
+   "mb": 5.1
   },
   "music_harbor": {
-   "peak": -12.0,
-   "rms": -26.6,
-   "seam": 0.001
+   "title": "Motion Blur",
+   "lufs": -18.1,
+   "mb": 4.1
   },
   "music_canyon": {
-   "peak": -12.0,
-   "rms": -26.2,
-   "seam": 0.0
+   "title": "Last Chance",
+   "lufs": -18.1,
+   "mb": 4.9
   },
   "music_downtown": {
-   "peak": -12.0,
-   "rms": -26.4,
-   "seam": 0.0005
+   "title": "Chalk Ninja",
+   "lufs": -18.1,
+   "mb": 3.4
   },
   "music_frost": {
-   "peak": -12.0,
-   "rms": -26.4,
-   "seam": 0.0001
+   "title": "An Unwavering Will",
+   "lufs": -18.1,
+   "mb": 5.3
+  },
+  "music_podium": {
+   "title": "A Tremendous Thing",
+   "lufs": -18.1,
+   "mb": 5.3
   }
  },
  "icons": [
@@ -236,6 +140,10 @@
   "gear",
   "prev",
   "next",
+  "players_1",
+  "players_2",
+  "players_3",
+  "players_4",
   "car",
   "flame",
   "flag",

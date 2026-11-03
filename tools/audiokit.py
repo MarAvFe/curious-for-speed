@@ -1,6 +1,6 @@
-"""Procedural, original audio: racing effects + driving minor-key loops. Fixed seeds -> identical rebuilds.
+"""Procedural, original audio: racing effects + the engine loop (music comes from tools/music.py). Fixed seeds -> identical rebuilds.
 Smooth by construction: sine voices, soft attacks (>= 8 ms), one-pole low-pass, convolution reverb with a
-decaying filtered-noise impulse (no comb filters -> no metallic/periodic buzz). WAV 16-bit mono 44.1 kHz. Music loops are an integer number of bars; reverb + release tails wrap onto the head."""
+decaying filtered-noise impulse (no comb filters -> no metallic/periodic buzz). WAV 16-bit mono 44.1 kHz."""
 import wave
 import numpy as np
 from scipy.signal import lfilter, fftconvolve
@@ -80,7 +80,6 @@ def note(midi):
 
 
 PENTA = [0, 2, 4, 7, 9]
-MINOR_PENTA = [0, 3, 5, 7, 10]
 
 
 def harm(f, dur, partials, **kw):
@@ -159,65 +158,6 @@ def sfx():
     return out
 
 
-def drum_kick():
-    n = int(0.25 * SR)
-    t = np.arange(n) / SR
-    return tone(50 + 90 * np.exp(-t * 30), 0.25, a=0.002, d=0.08, s=0.2, r=0.12)
-
-
-def drum_hat(seed):
-    n = int(0.06 * SR)
-    x = np.random.default_rng(seed).normal(size=n)
-    x = x - lowpass(x, 6000)  # high-passed noise, soft
-    return x * env(n, 0.002, 0.02, 0.2, 0.03) * 0.5
-
-
-def music(name, root, bpm, prog, seed, bars=8, mode=MINOR_PENTA, drive=True):
-    """Driving loop: kick + soft hats, eighth-note bass, arpeggio lead, pad. Integer bars; tails wrapped onto the head."""
-    rng = np.random.default_rng(seed)
-    beat = 60 / bpm
-    L = int(bars * 4 * beat * SR)
-    buf = np.zeros(L + 3 * SR)
-
-    def add(x, t0):
-        i = int(t0 * SR)
-        buf[i:i + len(x)] += x[: len(buf) - i]
-
-    kick = drum_kick()
-    for b in range(bars):
-        deg = prog[b % len(prog)]
-        r = root + deg
-        t_bar = b * 4 * beat
-        for k in (0, 3, 7):  # minor pad, detuned pair
-            for det in (0.997, 1.003):
-                add(0.05 * tone(note(r + k) * det, 4 * beat, a=0.6, d=0.5, s=0.85, r=1.0), t_bar)
-        for e in range(8):  # eighth-note bass: root/octave pulse
-            m = r - 24 + (12 if e % 4 == 3 else 0)
-            add(0.32 * harm(note(m), beat * 0.45, ((1, 1), (2, 0.35), (3, 0.12)), a=0.006, d=0.08, s=0.6, r=0.06), t_bar + e * beat / 2)
-        if drive:
-            for q in range(4):
-                add(0.5 * kick, t_bar + q * beat)
-                add(0.18 * drum_hat(seed * 100 + b * 8 + q), t_bar + (q + 0.5) * beat)
-        for e in range(16 if drive else 8):  # lead arpeggio, some rests
-            if rng.random() < 0.3:
-                continue
-            step = beat / 4 if drive else beat / 2
-            m = root + 12 + deg + mode[(e + b + int(rng.integers(0, 3))) % len(mode)]
-            add(0.12 * harm(note(m), step * 1.6, ((1, 1), (2, 0.25)), a=0.006, d=0.08, s=0.3, r=0.1), t_bar + e * step)
-    wet = reverb(lowpass(buf, 3200), 0.2, 0)
-    wet[: len(wet) - L] += wet[L:]
-    return save(name, wet[:L], -12)
-
-
-MUSIC = {
-    "music_title": (57, 100, [0, 8, 3, 10], 1, False),
-    "music_harbor": (57, 124, [0, 0, 8, 10], 2, True),
-    "music_canyon": (52, 128, [0, 3, 10, 8], 3, True),
-    "music_downtown": (54, 126, [0, 8, 5, 7], 4, True),
-    "music_frost": (59, 120, [0, 5, 8, 3], 5, True),
-}
-
-
 def check(x) -> dict:
     """peak dBFS, RMS dBFS, seam jump (last->first sample)."""
     pk = 20 * np.log10(np.abs(x).max() + 1e-9)
@@ -227,12 +167,10 @@ def check(x) -> dict:
 
 def build() -> dict:
     out = sfx()
-    for k, (root, bpm, prog, seed, drive) in MUSIC.items():
-        out[k] = music(k, root, bpm, prog, seed, drive=drive)
     rep = {k: check(v) for k, v in out.items()}
     for k, r in rep.items():
         assert r["peak"] <= -6.0, f"{k} too loud"
-        if k.startswith(("music", "loop")):
+        if k.startswith("loop"):
             assert r["seam"] < 0.02, f"{k} loop seam pops"
     return rep
 

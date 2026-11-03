@@ -3,12 +3,14 @@ extends Node
 
 const DIR := "res://assets/audio/"
 const FADE := 1.2
+const DUCK_DB := -20.0  ## music level while the game is paused (pause menu, grown-up menu, window lost focus)
 
 var _sfx: Array[AudioStreamPlayer] = []
 var _music: Array[AudioStreamPlayer] = []
 var _cur := 0
 var _cache: Dictionary = {}
 var _last: Dictionary = {}  # sound -> last start time (anti-stacking)
+var _duck := AudioEffectAmplify.new()  # separate from the bus volume, which is the grown-up music slider
 
 
 func _ready() -> void:
@@ -20,6 +22,7 @@ func _ready() -> void:
 			AudioServer.set_bus_name(i, b)
 			AudioServer.set_bus_send(i, "Master")
 	Save.apply_settings()
+	AudioServer.add_bus_effect(AudioServer.get_bus_index("Music"), _duck)
 	var lim := AudioEffectHardLimiter.new()
 	lim.ceiling_db = -3.0
 	AudioServer.add_bus_effect(0, lim)
@@ -35,20 +38,29 @@ func _ready() -> void:
 		_music.append(p)
 
 
+func _process(dt: float) -> void:
+	_duck.volume_db = move_toward(_duck.volume_db, DUCK_DB if get_tree().paused else 0.0, 60.0 * dt)  # ~1/3 s glide
+
+
 func stream(name: String, loop := false) -> AudioStream:
 	if _cache.has(name):
 		return _cache[name]
-	var path := DIR + name + ".wav"
+	var path := DIR + name + ".ogg"  # music (tools/music.py); effects are .wav
+	if not ResourceLoader.exists(path):
+		path = DIR + name + ".wav"
 	if not ResourceLoader.exists(path):
 		push_warning("missing audio " + path)
 		_cache[name] = null
 		return null
-	var s: AudioStreamWAV = load(path)
+	var s: AudioStream = load(path)
 	if loop:
 		s = s.duplicate()
-		s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		s.loop_begin = 0
-		s.loop_end = s.data.size() / 2
+		if s is AudioStreamWAV:
+			s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			s.loop_begin = 0
+			s.loop_end = s.data.size() / 2
+		else:
+			s.loop = true
 	_cache[name] = s
 	return s
 

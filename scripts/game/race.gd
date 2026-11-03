@@ -776,6 +776,7 @@ func _podium() -> void:
 		_confetti.emitting = true
 		_podium_cam(views[0], 1.0, true)
 		_huds("podium")
+		AudioBus.music("music_podium")
 		engine.stop())
 	await get_tree().create_timer(2.0).timeout
 	for k in 4:

@@ -422,10 +422,10 @@ func _draw_overlay() -> void:
 	for k in n:
 		var p := _p[k]
 		var pc: Color = Game.PLAYER_COLOURS[k]
-		if n > 1 and _stage == "car":
+		if _stage == "car":
 			var b := _cells[p["cell"]]
-			var half := b.size * b.scale / 2.0 + Vector2.ONE * (2.0 + 3.0 * k) * u
-			_overlay.draw_rect(Rect2(b.position + b.size / 2.0 - half, half * 2.0), pc, false, 2.0 * u)
+			var half := b.size * b.scale / 2.0 + Vector2.ONE * (2.0 + 4.0 * k) * u
+			_overlay.draw_rect(Rect2(b.position + b.size / 2.0 - half, half * 2.0), pc, false, 3.0 * u)
 		var cx := _cam.unproject_position((p["stand"] as Node3D).global_position).x
 		var keys: Array = Bindings.PLAYER_KEYS[k]
 		var top := 4.0 * u
