@@ -1,0 +1,56 @@
+name: Build v0.2.0 Windows release
+
+on:
+  push:
+    branches: [ccr-91738260-nl034t]
+    paths: [.github/workflows/release-v0.2.0-windows.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.7"
+  TAG: v0.2.0
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          lfs: true
+
+      - name: Install Godot and export templates
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -sSfL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          mv "$RUNNER_TEMP"/godot/Godot_v*_linux.x86_64 "$RUNNER_TEMP/godot/godot"
+          tdir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$tdir"
+          unzip -q templates.tpz -d "$RUNNER_TEMP/tpl"
+          mv "$RUNNER_TEMP"/tpl/templates/* "$tdir/"
+          rm -f godot.zip templates.tpz
+
+      - name: Import and export Windows build
+        run: |
+          G="$RUNNER_TEMP/godot/godot"
+          "$G" --headless --import --path . || true
+          mkdir -p build/windows
+          "$G" --headless --path . --export-release "Windows" build/windows/curious-for-speed.exe
+          ls -lh build/windows
+          test -s build/windows/curious-for-speed.exe
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: v0.2.0 (split screen)
+          body: |
+            Split screen for up to 4 players and 8 playable vehicles with a colour picker. Music changes per screen.
+            **Windows:** download `curious-for-speed.exe` and double-click it. There's no install.
+          files: build/windows/curious-for-speed.exe
+          fail_on_unmatched_files: true
