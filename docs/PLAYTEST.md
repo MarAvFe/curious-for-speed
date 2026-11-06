@@ -15,3 +15,21 @@ Run `build/windows/curious-for-speed.exe` (or `godot --path .`). He picks a car 
 | Does he notice the webs on his car (the back of it, during the race)? | | |
 
 Write what he says out loud. Last time "no prob dad, I'll resolve that problem" became the moving gates.
+
+## Playtest log
+
+### 2026-11-03: v0.2.0 (split screen, Nihilore music)
+What we saw:
+- Very excited to win and to go fast.
+- Forgets the horn at first, slowly picks it up.
+- Excited to beat the others, with no shame at all in losing (yet). Yells at the screen and taunts the other cars.
+- Scrolls endlessly through the car menu.
+- Doesn't care about track selection, just confirms and moves on.
+- Absolutely loved playing together. Even when dad won he didn't care, he was just enjoying it.
+- Bug: in multiplayer, player 1's nitro stayed empty. Most likely the nitro key was held down the whole time, which kept the tank at zero. Fixed: after running dry, nitro waits until the tank is back to 30 %, so holding it still gives bursts and a filling gauge.
+
+What it suggests (Claude's reading, not his words):
+- Two players is the main mode now: worth tuning for, not a side feature.
+- The car menu is a toy in itself: things like reveals, sounds and spinning cars pay off there. The track menu could pick for him, or simply stay one press.
+- Taunting rivals fits "rivals with personality" in `docs/NEXT.md`: give him rivals worth yelling at.
+- Horn reactions (`docs/NEXT.md` #1) should help him remember the horn.

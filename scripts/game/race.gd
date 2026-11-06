@@ -426,7 +426,8 @@ func _drive_player(p: Racer, dt: float) -> void:
 		return
 	var target := p.cruise
 	var nitro := Bindings.act(p.who, "nitro")
-	p.boosting = Input.is_action_pressed(nitro) and p.nitro > 0.02
+	# once dry, wait for 30 % before boosting again: holding it forever still gives bursts and a filling gauge
+	p.boosting = Input.is_action_pressed(nitro) and p.nitro > (0.02 if p.boosting else 0.3)
 	if p.boosting:
 		target += NITRO_ADD * gs
 		p.nitro = maxf(p.nitro - 0.28 * dt, 0.0)
